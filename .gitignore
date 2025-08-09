@@ -9,3 +9,4 @@ __pycache__/
 *.parquet
 *.csv
 *.db
+misc/*
