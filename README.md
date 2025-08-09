@@ -23,4 +23,6 @@ Este projeto tem como objetivo realizar análises exploratórias e visualizaçõ
 
 ``python src/data_processing/create_raw_db.py``
 
+![alt text](image-1.png)
+
 # Análises em andamento...
