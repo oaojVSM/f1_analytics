@@ -10,6 +10,7 @@ SELECT
     d.code AS driver_code,
     d.forename AS driver_forename,
     d.surname AS driver_surname,
+    CONCAT(d.forename, ' ', d.surname) AS driver_full_name, -- Faço isso, porque tem pilotos que tem dois sobrenomes (Schumacher, Villeneuve, etc e isso mistura os dados)
     d.nationality AS driver_nationality,
     cons.name AS constructor_name,
     cons.nationality AS constructor_nationality,
@@ -17,6 +18,7 @@ SELECT
     res.positionOrder AS finishing_position,
     res.points AS points_scored,
     res.laps AS laps_completed,
+    res.time AS time_in_race,
     res.milliseconds AS time_in_race_ms,
     res.fastestLap AS fastest_lap_number, -- Em que volta o piloto fez a sua volta mais rápida
     res.rank AS fastest_lap_rank, -- Rank da volta mais rápida do piloto
