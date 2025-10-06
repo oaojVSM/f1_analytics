@@ -6,7 +6,7 @@ class DbReader:
     def __init__(self, db_path=None):
         if db_path is None:
             # Caminho padrão: data/f1.db na raiz do projeto
-            db_path = Path(__file__).resolve().parents[2] / "data" / "f1.db"
+            db_path = Path(__file__).resolve().parents[2] / "data" / "processed" / "f1.db"
         self.db_path = Path(db_path)
 
     def run_query(self, sql: str, params: tuple = None) -> pd.DataFrame:

@@ -16,5 +16,5 @@ def load_csvs_to_sqlite(data_dir: Path, db_path: Path):
 
 if __name__ == "__main__":
     raw_data_dir = Path(__file__).resolve().parents[2] / "data" / "raw"
-    db_file = Path(__file__).resolve().parents[2] / "data" / "f1.db"
+    db_file = Path(__file__).resolve().parents[2] / "data" / "processed" / "f1.db"
     load_csvs_to_sqlite(raw_data_dir, db_file)
