@@ -7,6 +7,7 @@ SELECT
     r.date AS race_date,
     c.name AS circuit_name,
     c.country AS circuit_country,
+    d.driverId AS driver_id,
     d.code AS driver_code,
     d.forename AS driver_forename,
     d.surname AS driver_surname,
