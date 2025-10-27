@@ -1,40 +1,56 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 from dateutil.relativedelta import relativedelta
 from matplotlib.patches import Rectangle
 from typing import Optional, Tuple
 
 def filtrar_evento(
     df: pd.DataFrame,
-    year: int,
-    circuit: str,
-    driver_fn: str | None = None,
+    year: Optional[int] = None,
+    race_name: Optional[str] = None,
+    circuit_name: Optional[str] = None,
+    driver_full_name: Optional[str] = None,
 ) -> pd.DataFrame:
     """
-    Filtra o DataFrame por ano, circuito e opcionalmente por piloto.
+    Filtra o DataFrame de eventos com base nos critérios fornecidos.
+
+    A função aplica filtros apenas para os argumentos que não são None,
+    permitindo uma filtragem modular.
 
     Parâmetros
     ----------
     df : pd.DataFrame
         DataFrame com dados de eventos.
-    year : int
+    year : int, optional
         Ano da corrida.
-    circuit : str
+    race_name : str, optional
+        Nome da corrida.
+    circuit_name : str, optional
         Nome do circuito.
-    driver_fn : str | None, default None
-        Nome do piloto (first name ou identificador). Se None, não filtra por piloto.
+    driver_full_name : str, optional
+        Nome completo do piloto.
 
     Retorna
     -------
     pd.DataFrame
         DataFrame filtrado.
     """
-    mask = (df["year"] == year) & (df["circuit_name"] == circuit)
+    df_filtrado = df.copy()
 
-    if driver_fn is not None:
-        mask &= df["driver_full_name"] == driver_fn
+    if year is not None:
+        df_filtrado = df_filtrado[df_filtrado["year"] == year]
 
-    return df.loc[mask].copy()
+    if race_name is not None:
+        df_filtrado = df_filtrado[df_filtrado["race_name"] == race_name]
+
+    if circuit_name is not None:
+        df_filtrado = df_filtrado[df_filtrado["circuit_name"] == circuit_name]
+
+    if driver_full_name is not None:
+        df_filtrado = df_filtrado[df_filtrado["driver_full_name"] == driver_full_name]
+
+    return df_filtrado
 
 
 # Calculando a idade na primeira corrida:
@@ -317,3 +333,104 @@ def graf_top10_pilotos(
 
     plt.tight_layout()
     plt.show()
+
+
+def identificar_voltas_safety_car(
+    df_laps: pd.DataFrame,
+    threshold_percent: float = 1.07,
+    group_cols = ['year', 'race_name']
+) -> pd.DataFrame:
+    """
+    Identifica prováveis voltas de Safety Car (ou VSC) em um DataFrame com múltiplas corridas.
+
+    A lógica se baseia no fato de que, durante um SC, os tempos de volta de todos
+    os pilotos aumentam significativamente. A função calcula um ritmo de corrida base
+    para cada corrida e sinaliza as voltas cujo tempo mediano é muito superior a esse ritmo.
+
+    Parâmetros
+    ----------
+    df_laps : pd.DataFrame
+        DataFrame contendo os tempos de volta de uma ou mais corridas.
+        Deve conter as colunas 'lap_number', 'lap_time_ms', 'is_pit_lap'.
+    threshold_percent : float, default 1.07
+        O percentual acima do ritmo base para considerar uma volta como de SC.
+        Por exemplo, 1.07 significa que a mediana da volta deve ser 7% mais lenta
+        que a mediana da corrida.
+
+    Retorna
+    -------
+    pd.DataFrame
+        Uma cópia do DataFrame original com a nova coluna 'is_safety_car_lap'.
+    """
+    df_out = df_laps.copy()
+
+    # 1. Filtrar voltas que não representam ritmo de corrida (pit stops, 1ª volta)
+    df_racing_laps = df_out.query("is_pit_lap == 0 and lap_number > 1").copy()
+
+    # 2. Calcular o ritmo de corrida base (mediana) PARA CADA CORRIDA
+    # O transform() alinha o resultado de volta ao DataFrame original.
+    baseline_pace_per_race = df_racing_laps.groupby(group_cols)['lap_time_ms'].transform('median')
+
+    # 3. Calcular a mediana do tempo de volta PARA CADA VOLTA de CADA CORRIDA
+    median_time_per_lap = df_out.groupby(group_cols + ['lap_number'])['lap_time_ms'].transform('median')
+
+    # 4. Adicionar o ritmo base ao DataFrame de voltas de corrida para comparação
+    df_racing_laps['baseline_pace'] = baseline_pace_per_race
+    # Mapear o ritmo base de volta para o DataFrame completo
+    df_out = df_out.merge(df_racing_laps[['baseline_pace']], left_index=True, right_index=True, how='left')
+
+    # 5. Identificar as voltas que são significativamente mais lentas que o ritmo base da sua respectiva corrida
+    df_out['is_safety_car_lap'] = median_time_per_lap > (df_out['baseline_pace'] * threshold_percent)
+
+    # Limpeza final
+    df_out = df_out.drop(columns=['baseline_pace'])
+    df_out['is_safety_car_lap'] = df_out['is_safety_car_lap'].fillna(False) # Garante que não haja NaNs
+
+    return df_out
+
+
+def filtrar_voltas_para_analise(
+    df: pd.DataFrame,
+    remove_pit_laps: bool = True,
+    remove_first_lap: bool = True,
+    remove_sc_laps: bool = True
+) -> pd.DataFrame:
+    """
+    Filtra voltas que não são representativas do ritmo de corrida em condições normais.
+
+    A função pode remover:
+    1. Voltas de entrada e saída de pit stops (requer a coluna 'is_pit_lap').
+    2. A primeira volta da corrida.
+
+    Esta função NÃO remove outliers estatísticos (como voltas lentas por erros do
+    piloto), sendo ideal para análises de consistência.
+
+    Parâmetros
+    ----------
+    df : pd.DataFrame
+        DataFrame com tempos de volta. Deve conter 'lap_time_ms' e 'lap_number'.
+        Se `remove_pit_laps` for True, deve conter também 'is_pit_lap'.
+    remove_pit_laps : bool, default True
+        Se True, remove voltas de pit stop.
+    remove_first_lap : bool, default True
+        Se True, remove a primeira volta de cada corrida.
+
+    Retorna
+    -------
+    pd.DataFrame
+        DataFrame com os tempos de volta filtrados.
+    """
+    df_filtrado = df.copy()
+
+    if remove_pit_laps:
+        if 'is_pit_lap' not in df_filtrado.columns:
+            raise ValueError("A coluna 'is_pit_lap' é necessária para remover voltas de pit stop.")
+        df_filtrado = df_filtrado.query("is_pit_lap == 0")
+
+    if remove_first_lap:
+        df_filtrado = df_filtrado.query("lap_number > 1")
+
+    if remove_sc_laps:
+        df_filtrado = df_filtrado.query("is_safety_car_lap == 0")
+
+    return df_filtrado
