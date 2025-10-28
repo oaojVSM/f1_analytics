@@ -372,18 +372,40 @@ def identificar_voltas_safety_car(
     baseline_pace_per_race = df_racing_laps.groupby(group_cols)['lap_time_ms'].transform('median')
 
     # 3. Calcular a mediana do tempo de volta PARA CADA VOLTA de CADA CORRIDA
-    median_time_per_lap = df_out.groupby(group_cols + ['lap_number'])['lap_time_ms'].transform('median')
+    #df_out['median_time_per_lap'] = df_out.groupby(group_cols + ['lap_number'])['lap_time_ms'].transform('median')
 
     # 4. Adicionar o ritmo base ao DataFrame de voltas de corrida para comparação
     df_racing_laps['baseline_pace'] = baseline_pace_per_race
     # Mapear o ritmo base de volta para o DataFrame completo
     df_out = df_out.merge(df_racing_laps[['baseline_pace']], left_index=True, right_index=True, how='left')
 
-    # 5. Identificar as voltas que são significativamente mais lentas que o ritmo base da sua respectiva corrida
-    df_out['is_safety_car_lap'] = median_time_per_lap > (df_out['baseline_pace'] * threshold_percent)
+    # Valor que vou usar como corte:
+    df_out['baseline_pace_plus_threshold'] = df_out['baseline_pace'] * threshold_percent
+
+    # 5. Identificar se o piloto perdeu posições na volta seguinte
+    # Isso ajuda a diferenciar uma volta lenta por SC de uma rodada/erro individual.
+    # Agrupamos por corrida e piloto para fazer o shift corretamente.
+    driver_group_cols = group_cols + ['driver_full_name']
+    df_out['next_lap_position'] = df_out.groupby(driver_group_cols)['position_on_lap'].shift(-1)
+    # A condição é verdadeira se a posição piorou (ex: de P5 para P8)
+    lost_position = df_out['next_lap_position'] > df_out['position_on_lap'] + 3 # Coloco uma tolerância de 3 posições aqui (a ideia é que, se o piloto cometeu um erro grave que o fez perder muito tempo, ele vai perder masi do que isso em posições)
+
+    # 6. Identificar as voltas candidatas a SC (significativamente mais lentas)
+    is_slow_lap = df_out['lap_time_ms'] > (df_out['baseline_pace'] * threshold_percent)
+
+    # 7. Uma volta é considerada de SC se for lenta E o piloto NÃO perdeu posição.
+    # Isso filtra os erros individuais.
+    is_sc_lap = is_slow_lap & ~lost_position
+
+    # 8. Identificar a volta ANTERIOR à volta de SC, por corrida
+    # Usamos groupby + shift para "olhar" para a volta seguinte dentro de cada grupo de corrida
+    is_lap_before_sc = df_out.assign(_is_sc_lap=is_sc_lap).groupby(group_cols)['_is_sc_lap'].shift(-1).fillna(False)
+
+    # 9. A volta é considerada de SC se for a volta lenta (filtrada) OU a volta anterior a ela
+    df_out['is_safety_car_lap'] = is_sc_lap | is_lap_before_sc
 
     # Limpeza final
-    df_out = df_out.drop(columns=['baseline_pace'])
+    df_out = df_out.drop(columns=['baseline_pace', 'next_lap_position'], errors='ignore')
     df_out['is_safety_car_lap'] = df_out['is_safety_car_lap'].fillna(False) # Garante que não haja NaNs
 
     return df_out
@@ -393,7 +415,8 @@ def filtrar_voltas_para_analise(
     df: pd.DataFrame,
     remove_pit_laps: bool = True,
     remove_first_lap: bool = True,
-    remove_sc_laps: bool = True
+    remove_sc_laps: bool = True,
+    remove_dnf_races: bool = True
 ) -> pd.DataFrame:
     """
     Filtra voltas que não são representativas do ritmo de corrida em condições normais.
@@ -414,6 +437,8 @@ def filtrar_voltas_para_analise(
         Se True, remove voltas de pit stop.
     remove_first_lap : bool, default True
         Se True, remove a primeira volta de cada corrida.
+    remove_dnf_races : bool, default True
+        Se True, remove todas as voltas de corridas que o piloto não terminou ('Finished').
 
     Retorna
     -------
@@ -433,4 +458,84 @@ def filtrar_voltas_para_analise(
     if remove_sc_laps:
         df_filtrado = df_filtrado.query("is_safety_car_lap == 0")
 
+    if remove_dnf_races:
+        if 'race_status' not in df_filtrado.columns:
+            raise ValueError("A coluna 'race_status' é necessária para remover corridas não finalizadas (DNF).")
+        df_filtrado = df_filtrado.query("race_status == 'Finished'")
+
     return df_filtrado
+
+def comparar_consistencia_pilotos_hist(
+    df_consistencia: pd.DataFrame,
+    piloto_base: str = "Max Verstappen",
+    pilotos_a_comparar: list = [],
+    metrica: str = 'lap_time_std',
+    bins: int = 50,
+    figsize: tuple = (14, 7)
+):
+    """
+    Gera histogramas comparando a consistência de um piloto base com outros pilotos.
+
+    Para cada piloto na lista `pilotos_a_comparar`, um novo gráfico é gerado
+    mostrando a distribuição da métrica de consistência (ex: 'lap_time_std')
+    do piloto base vs. o piloto comparado.
+
+    Parâmetros
+    ----------
+    df_consistencia : pd.DataFrame
+        DataFrame gerado por `calcular_consistencia_pilotos`.
+    piloto_base : str, default "Max Verstappen"
+        O piloto principal para a comparação.
+    pilotos_a_comparar : list
+        Lista de nomes de pilotos para comparar com o piloto base.
+    metrica : str, default 'lap_time_std'
+        A coluna da métrica a ser plotada ('lap_time_std' ou 'consistency_cv').
+    bins : int, default 50
+        Número de bins para o histograma.
+    figsize : tuple, default (14, 7)
+        Tamanho da figura do gráfico.
+    """
+    if not pilotos_a_comparar:
+        print("A lista `pilotos_a_comparar` está vazia. Nenhum gráfico para gerar.")
+        return
+
+    for piloto_comparado in pilotos_a_comparar:
+        fig, ax = plt.subplots(figsize=figsize)
+
+        pilotos_no_grafico = [piloto_base, piloto_comparado]
+        df_plot = df_consistencia[df_consistencia['driver_full_name'].isin(pilotos_no_grafico)]
+
+        # Define uma paleta de cores fixa para garantir consistência
+        cor_base = "#FF7009"      # Laranja para o piloto base (Verstappen)
+        cor_comparado = "#4C72B0" # Azul para o piloto comparado
+        palette = {piloto_base: cor_base, piloto_comparado: cor_comparado}
+
+        # Garante a ordem dos pilotos no gráfico e na legenda
+        hue_order = [piloto_base, piloto_comparado]
+
+        # Calcula o número de corridas (amostra) para cada piloto
+        n_corridas_base = len(df_plot[df_plot['driver_full_name'] == piloto_base])
+        n_corridas_comparado = len(df_plot[df_plot['driver_full_name'] == piloto_comparado])
+
+        # Plot do histograma e da curva de densidade (KDE)
+        sns.histplot(data=df_plot, x=metrica, hue='driver_full_name', bins=bins, kde=True, ax=ax, palette=palette, hue_order=hue_order)
+
+        # Adiciona linhas verticais para a média de cada piloto
+        media_base = df_plot[df_plot['driver_full_name'] == piloto_base][metrica].mean()
+        media_comparado = df_plot[df_plot['driver_full_name'] == piloto_comparado][metrica].mean()
+
+        ax.axvline(media_base, color=cor_base, linestyle='--', linewidth=2, label=f'Média {piloto_base.split(" ")[-1]}: {media_base:.2f}')
+        ax.axvline(media_comparado, color=cor_comparado, linestyle='--', linewidth=2, label=f'Média {piloto_comparado.split(" ")[-1]}: {media_comparado:.2f}')
+
+        # Títulos e rótulos
+        ax.set_title(f"Comparativo de Consistência: {piloto_base} vs. {piloto_comparado}", fontsize=16)
+        ax.set_xlabel(f"{metrica} (Menor é mais consistente)", fontsize=12)
+        ax.set_ylabel("Frequência (nº de corridas)", fontsize=12)
+
+        # Atualiza a legenda para incluir a contagem de corridas
+        handles, _ = ax.get_legend_handles_labels()
+        labels = [f'{piloto_base} ({n_corridas_base} corridas)', f'{piloto_comparado} ({n_corridas_comparado} corridas)'] + [h.get_label() for h in handles[2:]]
+        ax.legend(handles=handles, labels=labels)
+
+        ax.grid(axis='y', linestyle='--', alpha=0.6)
+        plt.show()

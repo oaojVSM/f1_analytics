@@ -25,6 +25,7 @@ SELECT
     lt.position AS position_on_lap,
     lt.time AS lap_time,
     lt.milliseconds AS lap_time_ms,
+    s.status AS race_status, -- Status final do piloto na corrida
     -- Adiciona uma flag para identificar se a volta é de pit stop (entrada ou saída)
     CASE
         WHEN lt.lap = pl.in_lap OR lt.lap = pl.out_lap THEN 1
@@ -32,7 +33,9 @@ SELECT
     END AS is_pit_lap
 FROM
     lap_times AS lt
-    LEFT JOIN races AS r ON lt.raceId = r.raceId
-    LEFT JOIN circuits AS c ON r.circuitId = c.circuitId
-    LEFT JOIN drivers AS d ON lt.driverId = d.driverId
-    LEFT JOIN pit_laps AS pl ON lt.raceId = pl.raceId AND lt.driverId = pl.driverId AND (lt.lap = pl.in_lap OR lt.lap = pl.out_lap);
+    LEFT JOIN races r ON lt.raceId = r.raceId
+    LEFT JOIN circuits c ON r.circuitId = c.circuitId
+    LEFT JOIN drivers d ON lt.driverId = d.driverId
+    LEFT JOIN results res ON lt.raceId = res.raceId AND lt.driverId = res.driverId -- Join para buscar o resultado
+    LEFT JOIN status s ON res.statusId = s.statusId -- Join para buscar o texto do status
+    LEFT JOIN pit_laps pl ON lt.raceId = pl.raceId AND lt.driverId = pl.driverId AND (lt.lap = pl.in_lap OR lt.lap = pl.out_lap);
