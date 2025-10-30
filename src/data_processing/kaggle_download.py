@@ -8,6 +8,8 @@ from pathlib import Path
 def download_f1_dataset(dataset_id="rohanrao/formula-1-world-championship-1950-2020"):
     """
     Faz o download do dataset da F1 usando kagglehub e salva em data/raw.
+
+    DEPRECATED: Essa função só tem dados até 2024. Criei um outro módulo para extrair dados da API Jolpica que contém dados de 2025.
     """
     print(f"Baixando dataset '{dataset_id}' do Kaggle...")
     dataset_path = kagglehub.dataset_download(dataset_id)
