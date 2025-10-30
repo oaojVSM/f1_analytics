@@ -539,3 +539,94 @@ def comparar_consistencia_pilotos_hist(
 
         ax.grid(axis='y', linestyle='--', alpha=0.6)
         plt.show()
+
+def compara_companheiros_de_equipe(
+    df_dados: pd.DataFrame,
+    df_lookup: pd.DataFrame,
+    target_driver_id: int,
+    metricas_comparar: list[str],
+    chaves_lookup: list[str],
+    coluna_equipe: str = 'constructorId',
+    chaves_evento: list[str] = ['raceId']
+) -> pd.DataFrame:
+    """
+    Compara um piloto-alvo com seu companheiro de equipe, buscando
+    a informação de equipe em um DataFrame de lookup separado.
+
+    Argumentos:
+    df_dados (pd.DataFrame): O DataFrame-fonte com as métricas
+                             (ex: lap_times_df).
+    df_lookup (pd.DataFrame): O DataFrame usado para encontrar a equipe
+                              (ex: results_df).
+    target_driver_id (int): O 'driverId' do piloto-alvo.
+    metricas_comparar (list[str]): Nomes das colunas de métricas para comparar
+                                   (ex: ['milliseconds']).
+    chaves_lookup (list[str]): Colunas para juntar 'df_dados' com 'df_lookup'
+                               (ex: ['raceId', 'driverId']).
+    coluna_equipe (str): Nome da coluna que identifica a equipe 
+                         (default: 'constructorId').
+    chaves_evento (list[str]): Colunas que definem um evento único 
+                               (default: ['raceId']). A 'coluna_equipe'
+                               será adicionada a esta lista.
+
+    Retorna:
+    pd.DataFrame: Um DataFrame comparativo com colunas lado a lado
+                  (sufixos '_target' e '_tmate').
+    """
+
+    # --- Etapa 1: Merge de Enriquecimento ---
+
+    # 1.1. Selecionar apenas as colunas necessárias do lookup para evitar duplicatas
+    colunas_info_equipe = chaves_lookup + [coluna_equipe]
+    df_info_equipe = df_lookup[colunas_info_equipe].drop_duplicates()
+
+    # 1.2. Juntar os dados de métrica com as informações da equipe
+    df_dados_com_equipe = pd.merge(
+        df_dados,
+        df_info_equipe,
+        on=chaves_lookup,
+        how='left'  # Usamos 'left' para manter todas as métricas do df_dados
+    )
+
+    # 1.3. Limpar dados onde a equipe não foi encontrada
+    df_dados_com_equipe = df_dados_com_equipe.dropna(subset=[coluna_equipe])
+    
+    # Garantir que o tipo da coluna da equipe seja adequado (ex: int)
+    df_dados_com_equipe[coluna_equipe] = df_dados_com_equipe[coluna_equipe].astype(int)
+
+
+    # --- Etapa 2: Merge de Companheiros (Self-Merge) ---
+    # (Esta parte é a lógica da função anterior, agora aplicada ao 
+    #  DataFrame 'df_dados_com_equipe' que acabamos de criar)
+
+    # 2.1. Definir as chaves completas para o self-merge
+    chaves_join_companheiro = chaves_evento + [coluna_equipe]
+    
+    # 2.2. Colunas que queremos manter de cada lado
+    colunas_manter = chaves_join_companheiro + metricas_comparar + ['driverId']
+
+    # 2.3. Separar o piloto-alvo dos outros
+    df_target = df_dados_com_equipe.loc[
+        df_dados_com_equipe['driverId'] == target_driver_id,
+        colunas_manter
+    ].copy()
+
+    df_teammates = df_dados_com_equipe.loc[
+        df_dados_com_equipe['driverId'] != target_driver_id,
+        colunas_manter
+    ].copy()
+    
+    # 2.4. Renomear 'driverId' do companheiro antes do merge para evitar conflito
+    df_teammates = df_teammates.rename(columns={'driverId': 'driverId_tmate'})
+    # E dropar do target
+    df_target = df_target.drop(columns=['driverId'])
+
+    # 2.5. O Merge Mágico
+    df_comparativo = pd.merge(
+        df_target,
+        df_teammates,
+        on=chaves_join_companheiro,
+        suffixes=('_target', '_tmate')
+    )
+
+    return df_comparativo
