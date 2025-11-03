@@ -52,6 +52,33 @@ def filtrar_evento(
 
     return df_filtrado
 
+def add_lap_time_ms_column(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Converte uma coluna de tempo de volta (string) para milissegundos e a adiciona ao DataFrame.
+
+    A função lida com formatos como 'HH:MM:SS.ms' ou 'MM:SS.ms' e cria uma
+    nova coluna chamada 'lap_time_ms'.
+
+    Parâmetros
+    ----------
+    df : pd.DataFrame
+        O DataFrame que contém a coluna de tempo de volta.
+
+    Retorna
+    -------
+    pd.DataFrame
+        O DataFrame com a nova coluna 'lap_time_ms'.
+    """
+    df_copy = df.copy()
+    # pd.to_timedelta é vetorizado e lida com a série inteira de uma vez.
+    # O `errors='coerce'` transforma valores inválidos em NaT (Not a Time),
+    # que se tornarão NaN (Not a Number) após o cálculo.
+    timedelta_series = pd.to_timedelta(df_copy['lap_time'], errors='coerce')
+
+    # Converte para milissegundos
+    df_copy['lap_time_ms'] = timedelta_series.dt.total_seconds() * 1000
+
+    return df_copy
 
 # Calculando a idade na primeira corrida:
 
