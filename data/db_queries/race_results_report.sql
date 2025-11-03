@@ -21,12 +21,14 @@ fastest_laps AS (
 )
 SELECT
     r.name AS race_name,
+    r.id AS round_id,
     c.year AS year,
     r.date AS race_date,
     circ.name AS circuit_name,
     circ.country AS circuit_country,
     d.id AS driver_id,
     d.abbreviation AS driver_code,
+    d.reference AS driver_ref,
     d.forename AS driver_forename,
     d.surname AS driver_surname,
     d.forename || ' ' || d.surname AS driver_full_name,
