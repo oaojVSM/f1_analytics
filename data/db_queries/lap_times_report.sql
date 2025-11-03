@@ -1,41 +1,59 @@
 -- SQLite
--- Query para montar versão de reporting da tabela de tempos de volta
+-- Query para montar versão de reporting da tabela de tempos de volta (compatível com novo schema)
 
- WITH pit_laps AS (
+WITH pit_laps AS (
     -- Identifica as voltas de entrada (in-lap) e saída (out-lap) dos boxes
     SELECT
-        raceId,
-        driverId,
-        lap AS in_lap,      -- A volta em que o piloto entrou no pit
-        (lap + 1) AS out_lap -- A volta seguinte à entrada no pit
-    FROM pit_stops
+        ps.session_entry_id,
+        l.number AS in_lap,      -- A volta em que o piloto entrou no pit
+        (l.number + 1) AS out_lap -- A volta seguinte à entrada no pit
+    FROM pitstop ps
+    JOIN lap l ON ps.lap_id = l.id
 )
 SELECT
     r.name AS race_name,
-    r.year AS year,
+    season.year AS year,
     r.date AS race_date,
     c.name AS circuit_name,
     c.country AS circuit_country,
-    d.code AS driver_code,
+    d.abbreviation AS driver_code,
     d.forename AS driver_forename,
     d.surname AS driver_surname,
-    CONCAT(d.forename, ' ', d.surname) AS driver_full_name,
+    d.forename || ' ' || d.surname AS driver_full_name,
     d.nationality AS driver_nationality,
-    lt.lap AS lap_number,
-    lt.position AS position_on_lap,
-    lt.time AS lap_time,
-    lt.milliseconds AS lap_time_ms,
-    s.status AS race_status, -- Status final do piloto na corrida
+    l.number AS lap_number,
+    l.position AS position_on_lap,
+    l.time AS lap_time,
+    se.status AS race_status, -- Status final do piloto na corrida
     -- Adiciona uma flag para identificar se a volta é de pit stop (entrada ou saída)
     CASE
-        WHEN lt.lap = pl.in_lap OR lt.lap = pl.out_lap THEN 1
+        WHEN l.number = pl.in_lap OR l.number = pl.out_lap THEN 1
         ELSE 0
     END AS is_pit_lap
 FROM
-    lap_times AS lt
-    LEFT JOIN races r ON lt.raceId = r.raceId
-    LEFT JOIN circuits c ON r.circuitId = c.circuitId
-    LEFT JOIN drivers d ON lt.driverId = d.driverId
-    LEFT JOIN results res ON lt.raceId = res.raceId AND lt.driverId = res.driverId -- Join para buscar o resultado
-    LEFT JOIN status s ON res.statusId = s.statusId -- Join para buscar o texto do status
-    LEFT JOIN pit_laps pl ON lt.raceId = pl.raceId AND lt.driverId = pl.driverId AND (lt.lap = pl.in_lap OR lt.lap = pl.out_lap);
+    lap AS l
+LEFT JOIN
+    sessionentry AS se ON l.session_entry_id = se.id
+LEFT JOIN
+    session AS s ON se.session_id = s.id
+LEFT JOIN
+    round AS r ON s.round_id = r.id
+LEFT JOIN
+    season AS season ON r.season_id = season.id
+LEFT JOIN
+    circuit AS c ON r.circuit_id = c.id
+LEFT JOIN
+    roundentry AS re ON se.round_entry_id = re.id
+LEFT JOIN
+    teamdriver AS td ON re.team_driver_id = td.id
+LEFT JOIN
+    driver AS d ON td.driver_id = d.id
+LEFT JOIN
+    pit_laps pl ON l.session_entry_id = pl.session_entry_id AND (l.number = pl.in_lap OR l.number = pl.out_lap)
+WHERE
+    s.type = 'R' -- Filtra para tempos de volta da corrida principal
+ORDER BY
+    season.year DESC, 
+    r.number DESC, 
+    l.number ASC,
+    l.position ASC;

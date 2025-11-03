@@ -1,12 +1,12 @@
 -- SQLite
--- Query para montar versão de reporting da tabela de resultados de corridas
+-- Query para montar versão de reporting da tabela de pilotos (compatível com novo schema)
 
 SELECT
-    driverId AS driver_id,
-    code AS driver_code,
+    id AS driver_id,
+    abbreviation AS driver_code,
     forename AS driver_forename,
     surname AS driver_surname,
-    CONCAT(forename, ' ', surname) AS driver_full_name, -- Alguns pilotos tem dois sobrenomes (Schumacher, Villeneuve, etc e isso mistura os dados)
-    dob AS dob -- Data de Nascimento
+    forename || ' ' || surname AS driver_full_name,
+    date_of_birth AS dob
 FROM
-    drivers
+    driver;
