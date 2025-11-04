@@ -52,7 +52,7 @@ def filtrar_evento(
 
     return df_filtrado
 
-def add_lap_time_ms_column(df: pd.DataFrame) -> pd.DataFrame:
+def add_lap_time_ms_column(df: pd.DataFrame, lap_time_col: str = 'lap_time') -> pd.DataFrame:
     """
     Converte uma coluna de tempo de volta (string) para milissegundos e a adiciona ao DataFrame.
 
@@ -73,7 +73,7 @@ def add_lap_time_ms_column(df: pd.DataFrame) -> pd.DataFrame:
     # pd.to_timedelta é vetorizado e lida com a série inteira de uma vez.
     # O `errors='coerce'` transforma valores inválidos em NaT (Not a Time),
     # que se tornarão NaN (Not a Number) após o cálculo.
-    timedelta_series = pd.to_timedelta(df_copy['lap_time'], errors='coerce')
+    timedelta_series = pd.to_timedelta(df_copy[lap_time_col], errors='coerce')
 
     # Converte para milissegundos
     df_copy['lap_time_ms'] = timedelta_series.dt.total_seconds() * 1000
@@ -177,31 +177,35 @@ def gera_graf_top_10_mais_jovens(df_top_10_jovens: pd.DataFrame, titulo: str, xl
     plt.tight_layout()
     plt.show()
 
-def graf_top10_pilotos(
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
+from typing import Optional, Tuple
+
+def graf_top_pilotos(
     df: pd.DataFrame,
+    top_n: int = 10,
     col_nome: str = "driver_full_name",
     col_valor: str = "qtd",
-    col_detalhe: Optional[str] = None,   # ex.: "2016–2024"
-    titulo: str = "Top 10 pilotos",
+    col_detalhe: Optional[str] = None,  # ex.: "2016–2024"
+    titulo: Optional[str] = None,
     xlabel: str = "Total",
     nome_a_destacar: str = "Verstappen",
-    orientation: str = "horizontal",     # "horizontal" (barras) ou "vertical" (colunas)
+    orientation: str = "horizontal",  # "horizontal" (barras) ou "vertical" (colunas)
     figsize: Tuple[int, int] = (18, 9),
     cor_base: str = "#4C72B0",
     cor_destaque: str = "#FF7009",
-    mostrar_chips: bool = True,
     valor_format_str: str = "{:,.0f}"
 ):
     """
-    Plota Top 10 pilotos (poles, vitórias, etc.) com visual consistente e destaque.
-    - Sem subtítulo e sem nota de rodapé (menos “firula”).
-    - Chips de rank ajustados para não sobrepor o nome.
+    Plota Top N pilotos (poles, vitórias, etc.) com visual consistente e destaque.
+    - Lida com valores positivos e negativos (Horizontal e Vertical).
+    - Corrige sobreposição de nomes de pilotos (ticklabels) com barras negativas.
     - orientation="vertical" produz colunas em pé.
     """
-    # A formatação de número padrão substitui vírgula por ponto para o padrão brasileiro.
-
+    
     # --- Dados ---
-    dplot = df.copy().head(10).reset_index(drop=True)
+    dplot = df.copy().sort_values(by=col_valor, ascending=False).head(top_n).reset_index(drop=True)
     if col_detalhe and col_detalhe in dplot.columns:
         labels = dplot[col_nome] + "  (" + dplot[col_detalhe].astype(str) + ")"
     else:
@@ -209,6 +213,9 @@ def graf_top10_pilotos(
 
     valores = dplot[col_valor].astype(float)
     nomes = dplot[col_nome]
+    v_min, v_max = valores.min(), valores.max()
+    val_range = v_max - v_min if (v_max - v_min) != 0 else v_max
+    if val_range == 0: val_range = abs(v_max) if v_max != 0 else 1 # Evita divisão por zero
 
     fig, ax = plt.subplots(figsize=figsize)
 
@@ -221,21 +228,22 @@ def graf_top10_pilotos(
 
     # --- Plot (duas orientações) ---
     if orientation.lower().startswith("h"):
-        # Horizontal (barh)
+        # =======================================================
+        # GRÁFICO HORIZONTAL
+        # =======================================================
         y_pos = range(len(dplot))
         bars = ax.barh(
-            y=list(y_pos),
-            width=valores,
-            color=cor_base,
-            alpha=0.95,
-            edgecolor="none",
-            height=0.6,
-            zorder=2,
+            y=list(y_pos), width=valores, color=cor_base,
+            alpha=0.95, edgecolor="none", height=0.6, zorder=2,
         )
+        
+        xlim_min, xlim_max = (v_min * 1.15, v_max * 1.15)
+        if v_min >= 0: xlim_min = 0
+        if v_max <= 0: xlim_max = 0
+        highlight_xlim_min = xlim_min 
 
         # Destaque
         nome_lower = nome_a_destacar.lower()
-        vmax = float(valores.max()) if len(valores) else 1.0
         for i, (bar, nome) in enumerate(zip(bars, nomes)):
             if nome_lower in str(nome).lower():
                 bar.set_color(cor_destaque)
@@ -243,68 +251,83 @@ def graf_top10_pilotos(
                 bar.set_linewidth(1.5)
                 bar.set_edgecolor("black")
                 ax.add_patch(Rectangle(
-                    (0, bar.get_y()-0.08),
-                    vmax*1.02,
+                    (highlight_xlim_min, bar.get_y()-0.08), xlim_max - highlight_xlim_min,
                     bar.get_height()+0.16,
                     facecolor=cor_destaque, alpha=0.06, edgecolor="none", zorder=1
                 ))
-
-        # Eixo Y + labels
+        
+        # Posição dos Ticks (sem labels ainda)
         ax.set_yticks(list(y_pos))
-        ax.set_yticklabels([str(lbl) for lbl in labels])
         ax.invert_yaxis()  # #1 no topo
 
-        # Espaçamento: aumenta margem à esquerda para caber chip
-        plt.subplots_adjust(left=0.28)
-
-        # Chips de rank (à ESQUERDA do eixo, sem overlap)
-        if mostrar_chips:
-            # “empurra” os rótulos um pouco para a direita
-            ax.tick_params(axis='y', which='major', pad=6)
-            # usa coordenadas de eixo para posicionar do lado de fora
-            for i in y_pos:
-                ax.text(
-                    -0.02, i, f"#{i+1}",
-                    transform=ax.get_yaxis_transform(),  # x em coords de eixo, y em dados (ticks)
-                    va="center", ha="right",
-                    fontsize=11, fontweight="bold",
-                    bbox=dict(boxstyle="round,pad=0.25", facecolor="white", edgecolor="#d0d7de"),
-                    zorder=3
-                )
-
-        # Valores na ponta da barra
+        # Valores (números) na ponta da barra
         for bar, val in zip(bars, valores):
+            ha = 'left' if val >= 0 else 'right'
+            offset_text = val_range * 0.01 
+            x_pos = bar.get_width() + offset_text if val >= 0 else bar.get_width() - offset_text
+            if val == 0:
+                x_pos = offset_text
+                ha = 'left'
             ax.text(
-                bar.get_width() + (0.01 * vmax if vmax > 0 else 0.2),
-                bar.get_y() + bar.get_height()/2,
+                x_pos, bar.get_y() + bar.get_height()/2,
                 valor_format_str.format(val).replace(",", "."),
-                va="center", ha="left", fontsize=11, zorder=3
+                va="center", ha=ha, fontsize=11, zorder=3
             )
-
+        
         # Estética
-        ax.set_xlim(0, vmax * 1.15)
         ax.set_xlabel(xlabel, fontsize=12)
         ax.set_ylabel("")
         ax.grid(axis="x", linestyle="--", alpha=0.35)
-        for spine in ["top", "right", "left"]:
-            ax.spines[spine].set_visible(False)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
         ax.spines["bottom"].set_color("#d0d7de")
+        
+        # --- CORREÇÃO HORIZONTAL ---
+        # Define os limites do eixo X primeiro
+        ax.set_xlim(xlim_min, xlim_max)
+
+        if v_min < 0:
+            # Move o eixo Y (spine) para o zero para separar barras positivas e negativas
+            ax.spines["left"].set_position("zero")
+            ax.spines["left"].set_color("#d0d7de")
+            
+            # Desliga os labels automáticos que ficariam sobrepostos no eixo
+            ax.set_yticklabels([]) 
+            
+            # Usa um transform para posicionar os labels fora da área de dados
+            trans = ax.get_yaxis_transform()
+            for y, label_text in zip(y_pos, labels):
+                # Posiciona o texto em coordenadas de eixo (X) e dados (Y)
+                # -0.01 significa 1% à esquerda da área de plotagem
+                ax.text(
+                    -0.03, y, str(label_text) + " ", # Espaço para padding
+                    transform=trans,
+                    ha='right',  # Alinha o final do texto à posição
+                    va='center', 
+                    fontsize=11
+                )
+        else:
+            # Comportamento original para valores apenas positivos
+            ax.spines["left"].set_visible(False)
+            ax.set_yticklabels([str(lbl) for lbl in labels]) # Nomes no lugar padrão
 
     else:
-        # Vertical (colunas)
+        # =======================================================
+        # GRÁFICO VERTICAL
+        # =======================================================
         x_pos = range(len(dplot))
         bars = ax.bar(
-            x=list(x_pos),
-            height=valores,
-            color=cor_base,
-            alpha=0.95,
-            edgecolor="none",
-            width=0.6,
-            zorder=2,
+            x=list(x_pos), height=valores, color=cor_base,
+            alpha=0.95, edgecolor="none", width=0.6, zorder=2,
         )
 
+        ylim_min, ylim_max = (v_min * 1.2, v_max * 1.2)
+        if v_min >= 0: ylim_min = 0
+        if v_max <= 0: ylim_max = 0
+        ax.set_ylim(ylim_min, ylim_max)
+
+        # Destaque
         nome_lower = nome_a_destacar.lower()
-        vmax = float(valores.max()) if len(valores) else 1.0
         for i, (bar, nome) in enumerate(zip(bars, nomes)):
             if nome_lower in str(nome).lower():
                 bar.set_color(cor_destaque)
@@ -312,56 +335,92 @@ def graf_top10_pilotos(
                 bar.set_linewidth(1.5)
                 bar.set_edgecolor("black")
                 ax.add_patch(Rectangle(
-                    (bar.get_x()-0.08, 0),
-                    bar.get_width()+0.16,
-                    vmax*1.02,
+                    (bar.get_x()-0.08, ylim_min), bar.get_width()+0.16,
+                    ylim_max - ylim_min,
                     facecolor=cor_destaque, alpha=0.06, edgecolor="none", zorder=1
                 ))
 
-        # Rótulos no eixo X (rotacionados) e espaço
-        ax.set_xticks(list(x_pos))
-        ax.set_xticklabels([str(lbl) for lbl in labels], rotation=20, ha="right")
-        plt.subplots_adjust(bottom=0.26)
-
-        # Chips de rank (ACIMA de cada coluna)
-        if mostrar_chips:
-            for i, bar in enumerate(bars):
-                ax.text(
-                    bar.get_x() + bar.get_width()/2,
-                    bar.get_height() + vmax*0.03,
-                    f"#{i+1}",
-                    ha="center", va="bottom",
-                    fontsize=10, fontweight="bold",
-                    bbox=dict(boxstyle="round,pad=0.25", facecolor="white", edgecolor="#d0d7de"),
-                    zorder=3
-                )
-
-        # Valores acima das colunas
+        # Valores (números) acima/abaixo das colunas
         for bar, val in zip(bars, valores):
+            va = 'bottom' if val >= 0 else 'top'
+            offset = val_range * 0.01
+            y_pos = bar.get_height() + offset if val >= 0 else bar.get_height() - offset
+            if val == 0:
+                y_pos = offset
+                va = 'bottom'
             ax.text(
-                bar.get_x() + bar.get_width()/2,
-                bar.get_height() + vmax*0.01,
+                bar.get_x() + bar.get_width()/2, y_pos,
                 valor_format_str.format(val).replace(",", "."),
-                ha="center", va="bottom", fontsize=11, zorder=3
+                ha="center", va=va, fontsize=11, zorder=3
             )
 
         # Estética
-        ax.set_ylim(0, vmax * 1.20)  # um pouco mais de espaço p/ chips & valores
         ax.set_ylabel(xlabel, fontsize=12)
         ax.set_xlabel("")
         ax.grid(axis="y", linestyle="--", alpha=0.35)
-        for spine in ["top", "right"]:
-            ax.spines[spine].set_visible(False)
+        ax.spines["right"].set_visible(False)
         ax.spines["left"].set_color("#d0d7de")
-        ax.spines["bottom"].set_color("#d0d7de")
+        
+        # Define a posição dos ticks (sem labels ainda)
+        ax.set_xticks(list(x_pos))
 
-    # Título enxuto
-    ax.set_title(titulo, fontsize=18, pad=8, loc="left")
+        # --- CORREÇÃO VERTICAL ---
+        if v_min < 0:
+            # Move o eixo X (spine) para o zero
+            ax.spines["bottom"].set_position("zero")
+            ax.spines["bottom"].set_color("#d0d7de")
+            
+            # Move os Ticks e os Nomes (ticklabels) para o TOPO
+            ax.xaxis.set_ticks_position("top")
+            ax.spines["top"].set_visible(False) 
+            
+            # Aplica os Nomes (labels) com alinhamento e rotação para o TOPO
+            ax.set_xticklabels(
+                [str(lbl) for lbl in labels], 
+                rotation=20, 
+                ha="left"  # Alinha o *começo* do nome no tick (para "fora")
+            )
+            
+        else:
+            # Comportamento original (sem negativos)
+            ax.spines["bottom"].set_color("#d0d7de")
+            ax.spines["top"].set_visible(False)
+            
+            # Ticks e Nomes EMBAIXO (padrão)
+            ax.xaxis.set_ticks_position("bottom") 
+            ax.set_xticklabels(
+                [str(lbl) for lbl in labels], 
+                rotation=20, 
+                ha="right" # Alinha o *fim* do nome no tick (para "fora")
+            )
 
+    # Título
+    final_titulo = titulo if titulo is not None else f"Top {top_n} pilotos"
+    ax.set_title(final_titulo, fontsize=18, pad=8, loc="left")
+    
+    # Ajuste final de layout
     plt.tight_layout()
+    
+    # Ajuste de margem pós-tight_layout (necessário para nomes rotacionados)
+    if not orientation.lower().startswith("h"): # Se for Vertical
+        try:
+            max_label_len = max([len(str(l)) for l in labels])
+        except ValueError:
+            max_label_len = 0
+        
+        # Heurística para margem
+        margin_needed = max(0.15, min(0.4, max_label_len * 0.015)) 
+        
+        if v_min < 0:
+            # Deixa espaço no TOPO para os nomes
+            fig.subplots_adjust(top=1.0 - margin_needed) 
+        else:
+            # Deixa espaço EMBAIXO para os nomes
+            fig.subplots_adjust(bottom=margin_needed) 
+
     plt.show()
 
-
+    
 def identificar_voltas_safety_car(
     df_laps: pd.DataFrame,
     threshold_percent: float = 1.07,
@@ -567,7 +626,7 @@ def comparar_consistencia_pilotos_hist(
         ax.grid(axis='y', linestyle='--', alpha=0.6)
         plt.show()
 
-def compara_companheiros_de_equipe(
+def add_colunas_companheiro_equipe(
     df_dados: pd.DataFrame,
     metricas: list[str],
     df_lookup: pd.DataFrame = None,
@@ -579,8 +638,8 @@ def compara_companheiros_de_equipe(
     Adiciona colunas ao DataFrame com estatísticas do companheiro de equipe.
 
     Para cada linha/piloto no `df_dados`, esta função encontra o seu
-    companheiro de equipe no mesmo evento e adiciona as `metricas`
-    desse companheiro como novas colunas.
+    companheiro de equipe no mesmo evento, adiciona as `metricas`
+    desse companheiro como novas colunas, e calcula a diferença entre elas.
 
     O DataFrame original é retornado com as colunas adicionadas. Nenhuma
     linha é filtrada ou removida.
@@ -610,7 +669,8 @@ def compara_companheiros_de_equipe(
 
     Retorna:
         pd.DataFrame: Uma cópia do `df_dados` original com colunas adicionais
-                      para as estatísticas do companheiro (sufixo '_tmate').
+                      para as estatísticas do companheiro (sufixo '_tmate') e
+                      a diferença entre as métricas (sufixo '_diff_tmate').
     """
 
     # --- Etapa 1: Garantir que temos a informação da equipe ---
@@ -672,5 +732,13 @@ def compara_companheiros_de_equipe(
         on=chaves_lookup,
         how='left'
     )
+
+    # --- Etapa 6: Calcular a diferença para as métricas ---
+    for m in metricas:
+        col_tmate = f"{m}_tmate"
+        col_diff = f"{m}_diff_tmate"
+        
+        if m in df_final.columns and col_tmate in df_final.columns:
+            df_final[col_diff] = df_final[m] - df_final[col_tmate]
 
     return df_final
