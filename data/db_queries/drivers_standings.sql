@@ -11,6 +11,7 @@ SELECT
     d.abbreviation AS driver_code,
     d.forename AS driver_forename,
     d.surname AS driver_surname,
+    d.forename || ' ' || d.surname AS driver_full_name,
     ds.points,
     ds.position,
     ds.win_count AS wins
