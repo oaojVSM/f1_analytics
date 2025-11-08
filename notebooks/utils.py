@@ -76,7 +76,7 @@ def add_lap_time_ms_column(df: pd.DataFrame, lap_time_col: str = 'lap_time') -> 
     timedelta_series = pd.to_timedelta(df_copy[lap_time_col], errors='coerce')
 
     # Converte para milissegundos
-    df_copy['lap_time_ms'] = timedelta_series.dt.total_seconds() * 1000
+    df_copy[f'{lap_time_col}_ms'] = timedelta_series.dt.total_seconds() * 1000
 
     return df_copy
 
@@ -176,11 +176,6 @@ def gera_graf_top_10_mais_jovens(df_top_10_jovens: pd.DataFrame, titulo: str, xl
 
     plt.tight_layout()
     plt.show()
-
-import pandas as pd
-import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
-from typing import Optional, Tuple
 
 def graf_top_pilotos(
     df: pd.DataFrame,
@@ -454,11 +449,10 @@ def identificar_voltas_safety_car(
     df_racing_laps = df_out.query("is_pit_lap == 0 and lap_number > 1").copy()
 
     # 2. Calcular o ritmo de corrida base (mediana) PARA CADA CORRIDA
-    # O transform() alinha o resultado de volta ao DataFrame original.
     baseline_pace_per_race = df_racing_laps.groupby(group_cols)['lap_time_ms'].transform('median')
 
     # 3. Calcular a mediana do tempo de volta PARA CADA VOLTA de CADA CORRIDA
-    #df_out['median_time_per_lap'] = df_out.groupby(group_cols + ['lap_number'])['lap_time_ms'].transform('median')
+    df_out['median_time_per_lap'] = df_out.groupby(group_cols + ['lap_number'])['lap_time_ms'].transform('median')
 
     # 4. Adicionar o ritmo base ao DataFrame de voltas de corrida para comparação
     df_racing_laps['baseline_pace'] = baseline_pace_per_race
@@ -632,7 +626,8 @@ def add_colunas_companheiro_equipe(
     df_lookup: pd.DataFrame = None,
     chaves_lookup: list[str] = ['round_id', 'driver_ref'],
     coluna_equipe: str = 'constructor_name',
-    chaves_evento: list[str] = ['round_id']
+    chaves_evento: list[str] = ['round_id'],
+    colunas_id_tmate: list[str] = ['driver_ref']
 ) -> pd.DataFrame:
     """
     Adiciona colunas ao DataFrame com estatísticas do companheiro de equipe.
@@ -666,12 +661,19 @@ def add_colunas_companheiro_equipe(
         chaves_evento (list[str], optional): Colunas que definem um evento único
                                              (ex: uma corrida).
                                              Default é ['raceId'].
+        colunas_id_tmate (list[str], optional): Colunas de identificação do
+                                                companheiro a serem adicionadas.
+                                                'driver_ref' é obrigatório.
+                                                Default é ['driver_ref'].
 
     Retorna:
         pd.DataFrame: Uma cópia do `df_dados` original com colunas adicionais
                       para as estatísticas do companheiro (sufixo '_tmate') e
                       a diferença entre as métricas (sufixo '_diff_tmate').
     """
+
+    if 'driver_ref' not in colunas_id_tmate:
+        raise ValueError("A coluna 'driver_ref' é obrigatória em `colunas_id_tmate`.")
 
     # --- Etapa 1: Garantir que temos a informação da equipe ---
     df_com_equipe = df_dados.copy()
@@ -694,7 +696,8 @@ def add_colunas_companheiro_equipe(
     # --- Etapa 2: Preparar dados do companheiro para o "self-merge" ---
     chaves_join = chaves_evento + [coluna_equipe]
 
-    colunas_companheiro = chaves_join + ['driver_ref'] + metricas
+    colunas_companheiro = chaves_join + colunas_id_tmate + metricas
+    colunas_companheiro = sorted(list(set(colunas_companheiro)))
 
     if not set(colunas_companheiro).issubset(df_com_equipe.columns):
         colunas_faltantes = set(colunas_companheiro) - set(df_com_equipe.columns)
@@ -703,7 +706,8 @@ def add_colunas_companheiro_equipe(
     df_companheiros = df_com_equipe[colunas_companheiro].copy()
 
     rename_map = {m: f"{m}_tmate" for m in metricas}
-    rename_map['driver_ref'] = 'driver_ref_tmate'
+    for col in colunas_id_tmate:
+        rename_map[col] = f"{col}_tmate"
     df_companheiros = df_companheiros.rename(columns=rename_map)
 
     # --- Etapa 3: Parear pilotos com seus companheiros ---
@@ -720,7 +724,7 @@ def add_colunas_companheiro_equipe(
     # --- Etapa 4: Preparar colunas do companheiro para o join final ---
 
     # Isolar as colunas do companheiro que queremos adicionar
-    tmate_cols = [f"{m}_tmate" for m in metricas] + ['driver_ref_tmate']
+    tmate_cols = [f"{m}_tmate" for m in metricas] + [f"{c}_tmate" for c in colunas_id_tmate]
 
     # Manter apenas uma entrada por piloto (em caso de múltiplos companheiros)
     df_stats_companheiro = df_pareado[chaves_lookup + tmate_cols].drop_duplicates(subset=chaves_lookup)
@@ -742,3 +746,80 @@ def add_colunas_companheiro_equipe(
             df_final[col_diff] = df_final[m] - df_final[col_tmate]
 
     return df_final
+
+
+def get_final_quali_session(
+    df_quali_all: pd.DataFrame,
+    col_event: str = 'round_id',
+    col_driver: str = 'driver_id',
+    col_session: str = 'session_type',
+    col_pos: str = 'position'
+) -> pd.DataFrame:
+    """
+    Filtra um DataFrame de resultados de qualificação (Q1, Q2, Q3)
+    para retornar APENAS a posição final de cada piloto em cada evento.
+
+    A posição final é definida pelo resultado no segmento mais alto (Q3 > Q2 > Q1)
+    que o piloto alcançou.
+
+    Parâmetros:
+    ----------
+    df_quali_all : pd.DataFrame
+        O DataFrame de entrada contendo *todos* os resultados (Q1, Q2, Q3, etc.).
+    col_event : str, opcional
+        Nome da coluna que identifica o evento (ex: 'round_id').
+    col_driver : str, opcional
+        Nome da coluna que identifica o piloto (ex: 'driverId').
+    col_session : str, opcional
+        Nome da coluna com os tipos de sessão (ex: 'session_type').
+    col_pos : str, opcional
+        Nome da coluna com a posição (ex: 'position').
+
+    Retorna:
+    -------
+    pd.DataFrame
+        Um DataFrame filtrado contendo uma linha por piloto/evento,
+        com sua posição final de qualificação.
+    """
+    
+    # Copia para evitar SettingWithCopyWarning
+    df_proc = df_quali_all.copy()
+
+    # --- Passo 1: Mapear a Prioridade dos Segmentos ---
+    # Define qual sessão tem prioridade (Q3 é a mais alta)
+    priority_map = {
+        'Q1': 1,
+        'Q2': 2,
+        'Q3': 3,
+    }
+
+    # Cria a coluna de prioridade
+    df_proc['segment_priority'] = df_proc[col_session].map(priority_map)
+    
+    # Remove linhas que não são de qualificação (ex: FP1, 'R')
+    df_proc = df_proc[df_proc['segment_priority'].notna()].copy()
+
+    # --- Passo 2: Encontrar o Índice (idx) da Posição Final ---
+    
+    # Agrupa por evento e piloto
+    groups = df_proc.groupby([col_event, col_driver])
+    
+    try:
+        idx_final_position = groups['segment_priority'].idxmax()
+    except ValueError as e:
+        print(f"Aviso: Não foi possível processar os grupos. {e}")
+        # Retorna um DataFrame vazio se não houver dados de quali válidos
+        return pd.DataFrame(columns=df_quali_all.columns)
+
+    # --- Passo 3: Selecionar as Linhas Finais ---
+    # Usa .loc[] para selecionar apenas as linhas com os índices que encontramos
+    df_final_results = df_proc.loc[idx_final_position].copy()
+    
+    # --- Limpeza e Retorno ---
+    # Remove a coluna temporária
+    df_final_results = df_final_results.drop(columns=['segment_priority'])
+    
+    # Renomeia a coluna de posição para maior clareza (opcional)
+    df_final_results = df_final_results.rename(columns={col_pos: 'final_quali_position'})
+
+    return df_final_results

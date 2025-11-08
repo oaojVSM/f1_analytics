@@ -15,6 +15,7 @@ WITH BestLapPerDriver AS (
 SELECT
     r.name AS race_name,
     season.year AS year,
+    r.id AS round_id,
     r.date AS race_date,
     r.name AS circuit_name,
     c.locality AS circuit_locality,
@@ -24,6 +25,7 @@ SELECT
     d.surname AS driver_surname,
     d.forename || ' ' || d.surname AS driver_full_name,
     d.nationality AS driver_nationality,
+    d.reference AS driver_ref,
     t.name AS constructor_name,
     t.nationality AS constructor_nationality,
     se.position AS position,
