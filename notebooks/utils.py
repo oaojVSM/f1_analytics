@@ -427,6 +427,12 @@ def identificar_voltas_safety_car(
     A lógica se baseia no fato de que, durante um SC, os tempos de volta de todos
     os pilotos aumentam significativamente. A função calcula um ritmo de corrida base
     para cada corrida e sinaliza as voltas cujo tempo mediano é muito superior a esse ritmo.
+    Também é feita uma verificação se o piloto perdeu posições na volta seguinte, sendo que a lógica é
+    se ele perdeu posições, então pode ter cometido um erro próprio, então essa volta é mantida no dataset.
+
+    Originalmente, fiz essa função analisando mediana geral da volta VS mediana geral da corrida, mas não funciona
+    eu acabo carregando muitas voltas que não fazem sentido, o único jeito que a análise ficou consistente foi
+    pegando a mediana da corrida e comparando com a volta de cada piloto e fazendo a verificação de perda de posições
 
     Parâmetros
     ----------
@@ -449,13 +455,8 @@ def identificar_voltas_safety_car(
     df_racing_laps = df_out.query("is_pit_lap == 0 and lap_number > 1").copy()
 
     # 2. Calcular o ritmo de corrida base (mediana) PARA CADA CORRIDA
-    baseline_pace_per_race = df_racing_laps.groupby(group_cols)['lap_time_ms'].transform('median')
+    df_racing_laps['baseline_pace'] = df_racing_laps.groupby(group_cols)['lap_time_ms'].transform('median')
 
-    # 3. Calcular a mediana do tempo de volta PARA CADA VOLTA de CADA CORRIDA
-    df_out['median_time_per_lap'] = df_out.groupby(group_cols + ['lap_number'])['lap_time_ms'].transform('median')
-
-    # 4. Adicionar o ritmo base ao DataFrame de voltas de corrida para comparação
-    df_racing_laps['baseline_pace'] = baseline_pace_per_race
     # Mapear o ritmo base de volta para o DataFrame completo
     df_out = df_out.merge(df_racing_laps[['baseline_pace']], left_index=True, right_index=True, how='left')
 
@@ -471,10 +472,10 @@ def identificar_voltas_safety_car(
     lost_position = df_out['next_lap_position'] > df_out['position_on_lap'] + 3 # Coloco uma tolerância de 3 posições aqui (a ideia é que, se o piloto cometeu um erro grave que o fez perder muito tempo, ele vai perder masi do que isso em posições)
 
     # 6. Identificar as voltas candidatas a SC (significativamente mais lentas)
-    is_slow_lap = df_out['lap_time_ms'] > (df_out['baseline_pace'] * threshold_percent)
+    is_slow_lap = df_out['lap_time_ms'] > df_out['baseline_pace_plus_threshold']
 
     # 7. Uma volta é considerada de SC se for lenta E o piloto NÃO perdeu posição.
-    # Isso filtra os erros individuais.
+    # Isso filtra os erros individuais. Pq se for lento, e o piloto perdeu posições, então entendemos que ele pode ter errado e, nesse caso, a volta é mantida
     is_sc_lap = is_slow_lap & ~lost_position
 
     # 8. Identificar a volta ANTERIOR à volta de SC, por corrida
