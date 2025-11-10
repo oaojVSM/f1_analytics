@@ -418,7 +418,7 @@ def graf_top_pilotos(
     
 def identificar_voltas_safety_car(
     df_laps: pd.DataFrame,
-    threshold_percent: float = 1.07,
+    threshold_percent: float = 1.20,
     group_cols = ['year', 'race_name']
 ) -> pd.DataFrame:
     """
