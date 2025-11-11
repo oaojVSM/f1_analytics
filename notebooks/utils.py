@@ -4,6 +4,18 @@ import seaborn as sns
 from dateutil.relativedelta import relativedelta
 from matplotlib.patches import Rectangle
 from typing import Optional, Tuple
+import os
+
+# Define o caminho para o estilo do Matplotlib
+# O estilo 'dark_theme.mplstyle' deve estar na mesma pasta que este script (utils.py)
+style_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dark_theme.mplstyle')
+
+# Verifica se o arquivo de estilo existe antes de tentar usá-lo
+if os.path.exists(style_path):
+    plt.style.use(style_path)
+else:
+    print(f"Aviso: Arquivo de estilo não encontrado em '{style_path}'. Usando o estilo padrão do Matplotlib.")
+
 
 def filtrar_evento(
     df: pd.DataFrame,
@@ -213,13 +225,6 @@ def graf_top_pilotos(
     if val_range == 0: val_range = abs(v_max) if v_max != 0 else 1 # Evita divisão por zero
 
     fig, ax = plt.subplots(figsize=figsize)
-
-    # --- Fundo suave (cartão) ---
-    ax.add_patch(Rectangle(
-        (-0.02, -0.05), 1.04, 1.10,
-        transform=ax.transAxes,
-        facecolor="#f6f8fb", edgecolor="none", zorder=0
-    ))
 
     # --- Plot (duas orientações) ---
     if orientation.lower().startswith("h"):

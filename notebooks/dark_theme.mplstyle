@@ -1,0 +1,49 @@
+### Figure Style ###
+figure.facecolor: 121212
+figure.edgecolor: 121212
+figure.titleweight: bold
+figure.titlesize: 18
+
+### Axes Style ###
+axes.facecolor: 1E1E1E
+axes.edgecolor: 444444
+axes.labelcolor: EAEAEA
+axes.titlecolor: FFFFFF
+axes.titlesize: 16
+axes.titleweight: bold
+
+### Grid Style ###
+axes.grid: True
+axes.grid.axis: both
+axes.grid.which: major
+grid.color: 333333
+grid.linestyle: --
+grid.linewidth: 0.5
+
+### Tick Style ###
+xtick.color: B0B0B0
+ytick.color: B0B0B0
+xtick.labelsize: 12
+ytick.labelsize: 12
+xtick.direction: out
+ytick.direction: out
+
+### Line and Patch Style ###
+lines.linewidth: 2
+lines.markersize: 6
+patch.edgecolor: EAEAEA
+
+### Color Cycle ###
+# CORREÇÃO FINAL: Sintaxe completa do 'cycler' com aspas nas cores
+axes.prop_cycle: cycler(color=['5A9BD4', 'ED7D31', 'A5A5A5', 'FFC000', '4472C4', '70AD47', '264478', '9E480E'])
+
+### Text and Legend ###
+text.color: EAEAEA
+legend.frameon: False
+legend.facecolor: inherit
+legend.loc: best
+legend.fontsize: 12
+
+### Saving Figures ###
+savefig.transparent: True
+savefig.dpi: 300
