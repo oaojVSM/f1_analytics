@@ -11,3 +11,6 @@ __pycache__/
 *.db
 misc/*
 *old/
+grafs/*.png
+grafs/compara_consistencia*
+*.png
