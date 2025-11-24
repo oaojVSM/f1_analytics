@@ -132,17 +132,33 @@ def gerar_dataset_primeiro_evento(df_events: pd.DataFrame, df_drivers: pd.DataFr
 
     return df_first
 
-def gera_graf_top_10_mais_jovens(df_top_10_jovens: pd.DataFrame, titulo: str, xlabel: str, nome_a_ser_destacado: str):
+def gera_graf_top_10_mais_jovens(
+    df_top_10_jovens: pd.DataFrame, 
+    titulo: str, 
+    xlabel: str, 
+    nome_a_ser_destacado: str,
+    save_fig: bool = False,
+    save_path: str = 'grafs'
+):
     '''
-    Função para gerar o gráfico dos 10 pilotos mais jovens a realizar X em alguma corrida na F1, basta inserir um dataset com o top 10.
+    Função para gerar o gráfico dos 10 pilotos mais jovens.
     '''
-    # Cria rótulo de idade em anos e dias
+    
+    # Função interna para calcular a idade correta em anos e dias
+    def calcula_idade_texto_correto(row):
+        rd = relativedelta(row['race_date'], row['dob'])
+        anos = rd.years
+        # Calcula a diferença em dias desde o último aniversário
+        ultimo_aniversario = row['dob'] + relativedelta(years=anos)
+        dias_restantes = (row['race_date'] - ultimo_aniversario).days
+        return f"{anos} anos e {dias_restantes} dias"
+
+    # Aplica a função de cálculo de idade correta
     df_top_10_jovens["idade_texto"] = df_top_10_jovens.apply(
-        lambda r: f"{relativedelta(r['race_date'], r['dob']).years} anos e {relativedelta(r['race_date'], r['dob']).days} dias",
+        calcula_idade_texto_correto, 
         axis=1
     )
 
-    # Nome formatado para o eixo y
     df_top_10_jovens["label_y"] = (
         df_top_10_jovens["driver_full_name"] 
         + " (" 
@@ -152,43 +168,50 @@ def gera_graf_top_10_mais_jovens(df_top_10_jovens: pd.DataFrame, titulo: str, xl
         + ")"
     )
 
-    # Plot
     fig, ax = plt.subplots(figsize=(18,9))
 
     bars = ax.barh(
         df_top_10_jovens["label_y"], 
-        df_top_10_jovens["idade_primeiro_evento"], 
-        color="#4C72B0"
+        df_top_10_jovens["idade_primeiro_evento"]
     )
 
-    # Destaque pro Verstappen
     for bar, name in zip(bars, df_top_10_jovens["driver_full_name"]):
         if nome_a_ser_destacado in name:
             bar.set_color("#FF7009")
             bar.set_linewidth(2)
-            bar.set_edgecolor("black")
+            # Revertido para 'black' (seu original)
+            bar.set_edgecolor("black") 
 
-    # Rótulos de idade ao lado das barras
     for bar, label in zip(bars, df_top_10_jovens["idade_texto"]):
         ax.text(
             bar.get_width() + 0.05,
             bar.get_y() + bar.get_height()/2,
             label,
-            va="center", ha="left", fontsize=10
+            va="center", ha="left"
+            # Fontsize removido para obedecer o .mplstyle
         )
 
-    # Ajustes visuais
     ax.set_xlim(0, df_top_10_jovens["idade_primeiro_evento"].max() * 1.15)
-    ax.set_title(titulo, fontsize=16, pad=10)
+    ax.set_title(titulo, pad=10) # Fontsize removido
     ax.set_xlabel(xlabel)
     ax.set_ylabel("")
     ax.invert_yaxis()
-    ax.grid(axis="x", linestyle="--", alpha=0.4)
+    # Grid removido para obedecer o .mplstyle
 
+    if save_fig:
+        filename_base = "".join(c for c in titulo.lower() if c.isalnum() or c in (' ', '_')).replace(' ', '_')
+        filename = f"{filename_base}_safe.png"
+        
+        os.makedirs(save_path, exist_ok=True)
+        
+        full_path = os.path.join(save_path, filename)
+        try:
+            fig.savefig(full_path, bbox_inches='tight', pad_inches=0.1)
+            print(f"Gráfico salvo em: {os.path.abspath(full_path)}")
+        except Exception as e:
+            print(f"Erro ao salvar o gráfico: {e}")
 
-    plt.tight_layout()
     plt.show()
-
 def graf_top_pilotos(
     df: pd.DataFrame,
     top_n: int = 10,
@@ -199,10 +222,12 @@ def graf_top_pilotos(
     xlabel: str = "Total",
     nome_a_destacar: str = "Verstappen",
     orientation: str = "horizontal",  # "horizontal" (barras) ou "vertical" (colunas)
-    figsize: Tuple[int, int] = (18, 9),
-    cor_base: str = "#4C72B0",
+    figsize: Optional[Tuple[int, int]] = None,
+    cor_base: Optional[str] = None,
     cor_destaque: str = "#FF7009",
-    valor_format_str: str = "{:,.0f}"
+    valor_format_str: str = "{:,.0f}",
+    save_fig: bool = False,
+    save_path: str = 'grafs'
 ):
     """
     Plota Top N pilotos (poles, vitórias, etc.) com visual consistente e destaque.
@@ -224,7 +249,11 @@ def graf_top_pilotos(
     val_range = v_max - v_min if (v_max - v_min) != 0 else v_max
     if val_range == 0: val_range = abs(v_max) if v_max != 0 else 1 # Evita divisão por zero
 
-    fig, ax = plt.subplots(figsize=figsize)
+    if figsize:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig, ax = plt.subplots()
+
 
     # --- Plot (duas orientações) ---
     if orientation.lower().startswith("h"):
@@ -234,7 +263,7 @@ def graf_top_pilotos(
         y_pos = range(len(dplot))
         bars = ax.barh(
             y=list(y_pos), width=valores, color=cor_base,
-            alpha=0.95, edgecolor="none", height=0.6, zorder=2,
+            height=0.6, zorder=2,
         )
         
         xlim_min, xlim_max = (v_min * 1.15, v_max * 1.15)
@@ -271,16 +300,15 @@ def graf_top_pilotos(
             ax.text(
                 x_pos, bar.get_y() + bar.get_height()/2,
                 valor_format_str.format(val).replace(",", "."),
-                va="center", ha=ha, fontsize=11, zorder=3
+                va="center", ha=ha, zorder=3
             )
         
         # Estética
-        ax.set_xlabel(xlabel, fontsize=12)
+        ax.set_xlabel(xlabel)
         ax.set_ylabel("")
-        ax.grid(axis="x", linestyle="--", alpha=0.35)
+        ax.grid(axis="x")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-        ax.spines["bottom"].set_color("#d0d7de")
         
         # --- CORREÇÃO HORIZONTAL ---
         # Define os limites do eixo X primeiro
@@ -289,7 +317,6 @@ def graf_top_pilotos(
         if v_min < 0:
             # Move o eixo Y (spine) para o zero para separar barras positivas e negativas
             ax.spines["left"].set_position("zero")
-            ax.spines["left"].set_color("#d0d7de")
             
             # Desliga os labels automáticos que ficariam sobrepostos no eixo
             ax.set_yticklabels([]) 
@@ -303,8 +330,7 @@ def graf_top_pilotos(
                     -0.03, y, str(label_text) + " ", # Espaço para padding
                     transform=trans,
                     ha='right',  # Alinha o final do texto à posição
-                    va='center', 
-                    fontsize=11
+                    va='center'
                 )
         else:
             # Comportamento original para valores apenas positivos
@@ -318,7 +344,7 @@ def graf_top_pilotos(
         x_pos = range(len(dplot))
         bars = ax.bar(
             x=list(x_pos), height=valores, color=cor_base,
-            alpha=0.95, edgecolor="none", width=0.6, zorder=2,
+            width=0.6, zorder=2,
         )
 
         ylim_min, ylim_max = (v_min * 1.2, v_max * 1.2)
@@ -351,15 +377,14 @@ def graf_top_pilotos(
             ax.text(
                 bar.get_x() + bar.get_width()/2, y_pos,
                 valor_format_str.format(val).replace(",", "."),
-                ha="center", va=va, fontsize=11, zorder=3
+                ha="center", va=va, zorder=3
             )
 
         # Estética
-        ax.set_ylabel(xlabel, fontsize=12)
+        ax.set_ylabel(xlabel)
         ax.set_xlabel("")
-        ax.grid(axis="y", linestyle="--", alpha=0.35)
+        ax.grid(axis="y")
         ax.spines["right"].set_visible(False)
-        ax.spines["left"].set_color("#d0d7de")
         
         # Define a posição dos ticks (sem labels ainda)
         ax.set_xticks(list(x_pos))
@@ -368,7 +393,6 @@ def graf_top_pilotos(
         if v_min < 0:
             # Move o eixo X (spine) para o zero
             ax.spines["bottom"].set_position("zero")
-            ax.spines["bottom"].set_color("#d0d7de")
             
             # Move os Ticks e os Nomes (ticklabels) para o TOPO
             ax.xaxis.set_ticks_position("top")
@@ -383,7 +407,6 @@ def graf_top_pilotos(
             
         else:
             # Comportamento original (sem negativos)
-            ax.spines["bottom"].set_color("#d0d7de")
             ax.spines["top"].set_visible(False)
             
             # Ticks e Nomes EMBAIXO (padrão)
@@ -396,7 +419,7 @@ def graf_top_pilotos(
 
     # Título
     final_titulo = titulo if titulo is not None else f"Top {top_n} pilotos"
-    ax.set_title(final_titulo, fontsize=18, pad=8, loc="left")
+    ax.set_title(final_titulo, pad=8, loc="left")
     
     # Ajuste final de layout
     plt.tight_layout()
@@ -417,6 +440,23 @@ def graf_top_pilotos(
         else:
             # Deixa espaço EMBAIXO para os nomes
             fig.subplots_adjust(bottom=margin_needed) 
+
+
+    if save_fig:
+        # Sanitiza o título para um nome de arquivo válido
+        filename_base = "".join(c for c in titulo.lower() if c.isalnum() or c in (' ', '_')).replace(' ', '_')
+        filename = f"{filename_base}_safe.png"
+        
+        # Garante que o diretório de destino exista
+        os.makedirs(save_path, exist_ok=True)
+        
+        full_path = os.path.join(save_path, filename)
+        try:
+            fig.savefig(full_path)
+            print(f"Gráfico salvo em: {os.path.abspath(full_path)}")
+        except Exception as e:
+            print(f"Erro ao salvar o gráfico: {e}")
+
 
     plt.show()
 
@@ -557,7 +597,9 @@ def comparar_consistencia_pilotos_hist(
     pilotos_a_comparar: list = [],
     metrica: str = 'lap_time_std',
     bins: int = 50,
-    figsize: tuple = (14, 7)
+    figsize: Optional[Tuple[int, int]] = (16, 9),
+    save_fig: bool = False,
+    save_path: str = 'grafs'
 ):
     """
     Gera histogramas comparando a consistência de um piloto base com outros pilotos.
@@ -586,7 +628,10 @@ def comparar_consistencia_pilotos_hist(
         return
 
     for piloto_comparado in pilotos_a_comparar:
-        fig, ax = plt.subplots(figsize=figsize)
+        if figsize:
+            fig, ax = plt.subplots(figsize=figsize)
+        else:
+            fig, ax = plt.subplots()
 
         pilotos_no_grafico = [piloto_base, piloto_comparado]
         df_plot = df_consistencia[df_consistencia['driver_full_name'].isin(pilotos_no_grafico)]
@@ -610,20 +655,36 @@ def comparar_consistencia_pilotos_hist(
         media_base = df_plot[df_plot['driver_full_name'] == piloto_base][metrica].mean()
         media_comparado = df_plot[df_plot['driver_full_name'] == piloto_comparado][metrica].mean()
 
-        ax.axvline(media_base, color=cor_base, linestyle='--', linewidth=2, label=f'Média {piloto_base.split(" ")[-1]}: {media_base:.2f}')
-        ax.axvline(media_comparado, color=cor_comparado, linestyle='--', linewidth=2, label=f'Média {piloto_comparado.split(" ")[-1]}: {media_comparado:.2f}')
+        ax.axvline(media_base, color=cor_base, linestyle='--', label=f'Média {piloto_base.split(" ")[-1]}: {media_base:.2f}')
+        ax.axvline(media_comparado, color=cor_comparado, linestyle='--', label=f'Média {piloto_comparado.split(" ")[-1]}: {media_comparado:.2f}')
 
         # Títulos e rótulos
-        ax.set_title(f"Comparativo de Consistência: {piloto_base} vs. {piloto_comparado}", fontsize=16)
-        ax.set_xlabel(f"{metrica} (Menor é mais consistente)", fontsize=12)
-        ax.set_ylabel("Frequência (nº de corridas)", fontsize=12)
+        ax.set_title(f"Comparativo de Consistência: {piloto_base} vs. {piloto_comparado}")
+        ax.set_xlabel(f"{'Desv Pad. do Piloto VS Médio'} (Menor é mais consistente)")
+        ax.set_ylabel("Frequência (nº de corridas)")
 
         # Atualiza a legenda para incluir a contagem de corridas
         handles, _ = ax.get_legend_handles_labels()
         labels = [f'{piloto_base} ({n_corridas_base} corridas)', f'{piloto_comparado} ({n_corridas_comparado} corridas)'] + [h.get_label() for h in handles[2:]]
         ax.legend(handles=handles, labels=labels)
 
-        ax.grid(axis='y', linestyle='--', alpha=0.6)
+        ax.grid(axis='y')
+
+        if save_fig:
+            # Sanitiza o título para um nome de arquivo válido
+            filename_base = "".join(c for c in f'histograma_consistencia__{piloto_base}_vs_{piloto_comparado}'.lower() if c.isalnum() or c in (' ', '_')).replace(' ', '_')
+            filename = f"{filename_base}_safe.png"
+            
+            # Garante que o diretório de destino exista
+            os.makedirs(save_path, exist_ok=True)
+            
+            full_path = os.path.join(save_path, filename)
+            try:
+                fig.savefig(full_path, bbox_inches='tight')
+                print(f"Gráfico salvo em: {os.path.abspath(full_path)}")
+            except Exception as e:
+                print(f"Erro ao salvar o gráfico: {e}")
+
         plt.show()
 
 def add_colunas_companheiro_equipe(
