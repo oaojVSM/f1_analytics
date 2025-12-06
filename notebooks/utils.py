@@ -151,7 +151,7 @@ def gera_graf_top_10_mais_jovens(
         # Calcula a diferença em dias desde o último aniversário
         ultimo_aniversario = row['dob'] + relativedelta(years=anos)
         dias_restantes = (row['race_date'] - ultimo_aniversario).days
-        return f"{anos} anos e {dias_restantes} dias"
+        return f"{anos} years and {dias_restantes} days"
 
     # Aplica a função de cálculo de idade correta
     df_top_10_jovens["idade_texto"] = df_top_10_jovens.apply(
@@ -212,6 +212,8 @@ def gera_graf_top_10_mais_jovens(
             print(f"Erro ao salvar o gráfico: {e}")
 
     plt.show()
+
+    
 def graf_top_pilotos(
     df: pd.DataFrame,
     top_n: int = 10,
@@ -659,13 +661,13 @@ def comparar_consistencia_pilotos_hist(
         ax.axvline(media_comparado, color=cor_comparado, linestyle='--', label=f'Média {piloto_comparado.split(" ")[-1]}: {media_comparado:.2f}')
 
         # Títulos e rótulos
-        ax.set_title(f"Comparativo de Consistência: {piloto_base} vs. {piloto_comparado}")
-        ax.set_xlabel(f"{'Desv Pad. do Piloto VS Médio'} (Menor é mais consistente)")
-        ax.set_ylabel("Frequência (nº de corridas)")
+        ax.set_title(f"Consistency Comparison: {piloto_base} vs. {piloto_comparado}")
+        ax.set_xlabel("Driver Std. Dev. VS Avg. Std. Dev. (Lower = More Consistent) - ms")
+        ax.set_ylabel("Frequency (nº of races)")
 
         # Atualiza a legenda para incluir a contagem de corridas
         handles, _ = ax.get_legend_handles_labels()
-        labels = [f'{piloto_base} ({n_corridas_base} corridas)', f'{piloto_comparado} ({n_corridas_comparado} corridas)'] + [h.get_label() for h in handles[2:]]
+        labels = [f'{piloto_base} ({n_corridas_base} races)', f'{piloto_comparado} ({n_corridas_comparado} races)'] + [h.get_label() for h in handles[2:]]
         ax.legend(handles=handles, labels=labels)
 
         ax.grid(axis='y')
