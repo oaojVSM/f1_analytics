@@ -8,9 +8,9 @@ __pycache__/
 *.sqlite
 *.parquet
 *.csv
-*.db
-misc/*
+*.db*
+
+# Diretórios de output e arquivos temporários
+grafs/
+misc/
 *old/
-grafs/*.png
-grafs/compara_consistencia*
-*.png

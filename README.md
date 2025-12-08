@@ -1,16 +1,17 @@
 # F1 Analytics
 
 Projeto para explorar, consolidar e visualizar dados historicos da Formula 1 usando Python, SQLite e Jupyter Notebooks.
+Feito por João Marcolin com um tanto de vibe-coding com bom senso.
 
 ## Visao geral do fluxo
 
 1.  **Download dos dados (Manual)** - Os dados completos (1950-2025+) são baixados manualmente do *dump* do banco de dados Jolpica e colocados em `data/raw/`.
 2.  **Criacao do banco** - `src/data_processing/create_db.py` carrega os CSVs do *dump* em um banco SQLite localizado em `data/processed/f1.db`.
-3.  **Consultas e analises** - SQLs em `data/db_queries/` e utilitarios Python (`src/modules/db_reader.py`, `notebooks/utils.py`, `src/data_viz/plotter.py`) suportam notebooks exploratorios e geracao de graficos.
+3.  **Consultas e analises** - SQLs em `data/db_queries/` e utilitarios Python (`src/modules/data_processing/db_reader.py`, `src/analysis/data_viz/plotter.py` etc) suportam notebooks exploratorios e geracao de graficos.
 
 **NOTA SOBRE DADOS ANTIGOS:** O método anterior de download via `src/data_processing/kaggle_download.py` (usando `kagglehub`) é agora considerado **obsoleto**. Ele ainda funciona, mas os dados do Kaggle param em 2024 e não são mais a fonte principal deste projeto.
 
-## Pre-requisitos
+## Pré-requisitos
 
 -   Python 3.12+
 -   (Opcional) Ambiente virtual para isolar dependencias.
@@ -18,12 +19,13 @@ Projeto para explorar, consolidar e visualizar dados historicos da Formula 1 usa
 ## Configuracao rapida
 
 ```bash
-# 1) Criar e ativar um ambiente virtual (opcional)
+# 1. Criar e ativar um ambiente virtual (opcional, mas recomendado)
 python -m venv .venv
 # Windows PowerShell
 .venv\Scripts\Activate.ps1
+# No Linux/macOS, use: source .venv/bin/activate
 
-# 2) Instalar dependencias
+# 2. Instalar dependências
 pip install -r requirements.txt
 ````
 
