@@ -1,0 +1,69 @@
+# ----------------------------------------------------
+# --- ESTILO "CLEAN & AESTHETIC" PARA VÍDEO (DARK) ---
+# ----------------------------------------------------
+
+### Figura (Fundo) ###
+# Cor de fundo do notebook
+figure.facecolor: 1E1E1E
+figure.edgecolor: 1E1E1E
+figure.figsize: 16, 9
+savefig.transparent: True
+savefig.dpi: 300
+
+### Fontes ###
+font.family: sans-serif
+font.sans-serif: Roboto Slab
+font.weight: normal
+font.size: 16
+text.color: EAEAEA
+
+### Títulos e Labels ###
+figure.titleweight: bold
+figure.titlesize: 24
+axes.titleweight: bold
+axes.titlesize: 20
+axes.labelcolor: EAEAEA
+axes.labelweight: bold
+axes.labelsize: 18
+
+### Eixos (Axes) ###
+axes.facecolor: 1E1E1E
+# Cor suave para as linhas de eixo
+axes.edgecolor: 444444
+# Linha de eixo um pouco mais grossa
+axes.linewidth: 1.0
+# Remove o eixo de cima e da direita (visual clean)
+axes.spines.top: False
+axes.spines.right: False
+
+### Grid ###
+axes.grid: True
+# Grid APENAS no eixo Y
+axes.grid.axis: y
+# Grid bem escuro e sutil
+grid.color: 333333
+grid.linestyle: --
+# Um pouco mais grosso para ser visível
+grid.linewidth: 0.7
+
+### Ticks (Marcações) ###
+xtick.color: B0B0B0
+ytick.color: B0B0B0
+xtick.labelsize: 14
+ytick.labelsize: 14
+xtick.direction: out
+ytick.direction: out
+# Remove os "tracinhos" do eixo X e Y
+xtick.major.size: 0
+ytick.major.size: 0
+# Adiciona espaço entre o eixo X e os labels
+xtick.major.pad: 8
+
+### Cores (Ciclo de plotagem) ###
+axes.prop_cycle: cycler(color=['4C72B0', 'DD8452', '55A868', 'C44E52', '8172B3', '937860'])
+
+### Legenda ###
+legend.frameon: False
+legend.facecolor: inherit
+legend.loc: best
+legend.fontsize: 12
