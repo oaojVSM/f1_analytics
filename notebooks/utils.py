@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from dateutil.relativedelta import relativedelta
 from matplotlib.patches import Rectangle
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 import os
 
 # Define o caminho para o estilo do Matplotlib
@@ -894,7 +894,7 @@ def get_final_quali_session(
     return df_final_results
     
 
-def plotar_evolucao_construtores(
+def plot_wcc(
     df_campeonato: pd.DataFrame,
     ano: int = 2025,
     times_destaque: list = None,
@@ -975,9 +975,9 @@ def plotar_evolucao_construtores(
     )
 
     # 4. Estilização (Seguindo seu padrão)
-    ax.set_title(f"Evolução do Campeonato de Construtores - {ano}", fontsize=16, pad=20)
-    ax.set_xlabel("Grande Prêmio", fontsize=12)
-    ax.set_ylabel("Pontos Acumulados", fontsize=12)
+    ax.set_title(f"Worlds Constructors Championship Points - {ano}", fontsize=16, pad=20)
+    ax.set_xlabel("Grand Prix", fontsize=12)
+    ax.set_ylabel("Points", fontsize=12)
     
     # Grid apenas no eixo Y como solicitado
     ax.grid(axis='y', linestyle='--', alpha=0.7)
@@ -987,7 +987,7 @@ def plotar_evolucao_construtores(
 
     # Ajuste da legenda
     # Move a legenda para fora se tiver muitos times, ou canto superior esquerdo
-    ax.legend(title='Construtor', bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+    ax.legend(title='Constructor', bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
 
     # Ajuste de layout para caber a legenda e rotação do eixo X
     plt.tight_layout()
@@ -1005,6 +1005,146 @@ def plotar_evolucao_construtores(
         full_path = os.path.join(save_path, filename)
         try:
             fig.savefig(full_path, bbox_inches='tight', dpi=300) # dpi 300 para alta qualidade
+            print(f"Gráfico salvo em: {os.path.abspath(full_path)}")
+        except Exception as e:
+            print(f"Erro ao salvar o gráfico: {e}")
+
+    plt.show()
+
+def plot_wdc(
+    df_campeonato: pd.DataFrame,
+    ano: int = 2025,
+    pilotos_destaque: List[str] = None,
+    figsize: Optional[Tuple[int, int]] = (16, 9),
+    save_fig: bool = False,
+    save_path: str = 'grafs'
+):
+    """
+    Gera um gráfico de linha mostrando a evolução dos pontos do Campeonato de Pilotos
+    ao longo das rodadas (rounds), focado nos protagonistas definidos.
+
+    Parâmetros
+    ----------
+    df_campeonato : pd.DataFrame
+        DataFrame resultante da query SQL de driverchampionship.
+        Deve conter colunas: 'round_id', 'year', 'race_name', 'driver_full_name', 'points'.
+    ano : int
+        O ano do campeonato a ser filtrado.
+    pilotos_destaque : list, opcional
+        Lista de nomes COMPLETOS dos pilotos (ex: ['Lando Norris', 'Max Verstappen']).
+        Se None, plota o Top 5 do campeonato final.
+    figsize : tuple, default (16, 9)
+        Tamanho da figura.
+    save_fig : bool
+        Se True, salva o gráfico.
+    save_path : str
+        Pasta de destino.
+    """
+    
+    # 1. Preparação dos Dados
+    df_plot = df_campeonato[df_campeonato['year'] == ano].copy()
+    
+    if df_plot.empty:
+        print(f"Nenhum dado encontrado para o ano {ano}.")
+        return
+
+    # Garante ordem cronológica (a query original vem DESC)
+    df_plot.sort_values(by='round_id', ascending=True, inplace=True)
+
+    # 2. Filtragem de Pilotos
+    # Se o usuário não passar lista, pegamos automaticamente os top 5 da última rodada
+    if not pilotos_destaque:
+        ultima_rodada = df_plot['round_id'].max()
+        top_5 = df_plot[df_plot['round_id'] == ultima_rodada].sort_values('points', ascending=False).head(5)['driver_full_name'].tolist()
+        pilotos_destaque = top_5
+        print(f"No drivers specified. Plotting Top 5: {pilotos_destaque}")
+    
+    # Filtra o dataset apenas para os pilotos selecionados
+    df_plot = df_plot[df_plot['driver_full_name'].isin(pilotos_destaque)]
+
+    # 3. Mapeamento de Cores (Driver -> Team Color)
+    # Hex codes atualizados para 2025 (Considerando Hamilton na Ferrari, etc, se for o caso)
+    # Mapeando os principais protagonistas da sua narrativa
+    cores_pilotos = {
+# --- DISPUTA DO TÍTULO ---
+        'Max Verstappen': '#0600EF',  # Azul Red Bull Oficial
+        'Lando Norris':   '#FF8000',  # Laranja McLaren Oficial
+        'Oscar Piastri':  '#FCD800',  # Amarelo (Diferenciação T-Cam/Capacete) - Alto contraste com Laranja
+        
+        # --- FERRARI (Hamilton vs Leclerc) ---
+        'Charles Leclerc': '#DC0000', # Vermelho Ferrari Clássico
+        'Lewis Hamilton':  '#E8E817', # Amarelo Neon (Cor assinatura do Lewis) ou #AF0000 (Vermelho Escuro)
+        
+        # --- MERCEDES ---
+        'George Russell': '#00D2BE',  # Turquesa Mercedes
+        'Andrea Kimi Antonelli': '#005A52', # Turquesa Escuro/Verde para diferenciar
+        
+        # --- OUTROS ---
+        'Fernando Alonso': '#006F62', # Verde Aston Martin
+        'Sergio Perez':    '#7878FF', # Azul mais claro/desbotado (simbólico, rs)
+        'Carlos Sainz':    '#0090FF', # Azul Williams (supondo 2025 na Williams)
+    }
+
+    # Cria a figura
+    if figsize:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig, ax = plt.subplots()
+
+    # 4. Plotagem
+    # style='driver_full_name' ajuda a diferenciar pilotos da mesma equipe (ex: linha tracejada vs sólida)
+    # mas para ficar mais limpo, vamos usar apenas hue e markers.
+    sns.lineplot(
+        data=df_plot,
+        x='race_name',
+        y='points',
+        hue='driver_full_name',
+        palette=cores_pilotos, # O Seaborn vai tentar casar os nomes. Se não achar, usa cor default do ciclo.
+        style='driver_full_name', # Adiciona estilos de linha diferentes para diferenciar (ex: Norris sólido, Piastri tracejado)
+        markers=True,
+        dashes=True, # Permite linhas tracejadas automáticas
+        linewidth=3,
+        markersize=8,
+        ax=ax
+    )
+
+    # 5. Estilização
+    ax.set_title(f"World Drivers Championship (WDC) Points - {ano}", fontsize=18, pad=20, fontweight='bold')
+    ax.set_xlabel("Grand Prix", fontsize=12)
+    ax.set_ylabel("Points", fontsize=12)
+    
+    # Grid apenas no eixo Y para facilitar leitura de pontuação
+    ax.grid(axis='y', linestyle='--', alpha=0.6)
+    
+    # Rotacionar eixo X
+    plt.xticks(rotation=45, ha='right')
+
+    # Ajuste da Legenda
+    ax.legend(title='Driver', bbox_to_anchor=(1.01, 1), loc='upper left', borderaxespad=0, frameon=False)
+
+    # Anotação do Líder Final (Opcional, dá um charme data-driven)
+    last_points = df_plot.groupby('driver_full_name').last()['points']
+    for piloto, ponto in last_points.items():
+        # Pega a ultima rodada desse piloto
+        last_race_idx = df_plot[df_plot['driver_full_name'] == piloto]['race_name'].iloc[-1]
+        # Plota o texto do lado direito
+        # ax.text(x=len(df_plot['race_name'].unique())-1, y=ponto, s=f"{ponto:.0f}", va='center', fontsize=10, fontweight='bold')
+        pass # Desativado por padrão para não poluir, ative se quiser os números na ponta da linha
+
+    plt.tight_layout()
+
+    # 6. Salvamento
+    if save_fig:
+        # Sanitiza nome
+        nomes_str = "_".join([n.split()[-1] for n in pilotos_destaque]) # Pega só sobrenomes para o arquivo não ficar gigante
+        filename_base = "".join(c for c in f'drivers_evolution_{ano}_{nomes_str}'.lower() if c.isalnum() or c in (' ', '_')).replace(' ', '_')
+        filename = f"{filename_base}_safe.png"
+        
+        os.makedirs(save_path, exist_ok=True)
+        full_path = os.path.join(save_path, filename)
+        
+        try:
+            fig.savefig(full_path, bbox_inches='tight', dpi=300)
             print(f"Gráfico salvo em: {os.path.abspath(full_path)}")
         except Exception as e:
             print(f"Erro ao salvar o gráfico: {e}")
