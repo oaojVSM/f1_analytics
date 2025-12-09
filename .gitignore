@@ -14,3 +14,7 @@ __pycache__/
 grafs/
 misc/
 *old/
+
+
+# Manim
+/media/*
