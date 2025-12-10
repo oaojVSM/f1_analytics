@@ -274,3 +274,4 @@ def plot_wdc(
             print(f"Erro ao salvar o gráfico: {e}")
 
     plt.show()
+

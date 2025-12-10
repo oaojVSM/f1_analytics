@@ -1,9 +1,10 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+from pyparsing import Dict
 import seaborn as sns
 from dateutil.relativedelta import relativedelta
 from matplotlib.patches import Rectangle
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Union
 import os
 
 # Define o caminho para o estilo do Matplotlib
@@ -344,5 +345,113 @@ def graf_top_pilotos(
         except Exception as e:
             print(f"Erro ao salvar o gráfico: {e}")
 
+
+    plt.show()
+
+
+
+def graf_barras_padrao(
+    df_dados: pd.DataFrame,
+    x_col: str,
+    y_col: str,
+    hue_col: Optional[str] = None,
+    cores_map: Optional[Union[Dict, str]] = None,
+    titulo: str = "Gráfico de Barras",
+    xlabel: str = "Eixo X",
+    ylabel: str = "Eixo Y",
+    ano: int = None,
+    destaque: list = None,
+    figsize: Optional[Tuple[int, int]] = (16, 9),
+    save_fig: bool = False,
+    save_path: str = 'grafs',
+    fmt_rotulo: str = '%.0f' # <--- NOVO PARÂMETRO (Padrão: Inteiro sem decimal)
+):
+    """
+    Gera um gráfico de barras flexível com formatação customizável dos rótulos.
+    
+    Parâmetros Novos
+    ----------------
+    fmt_rotulo : str
+        String de formatação para os valores acima das barras.
+        Exemplos: 
+        '%.0f'   -> 10 (Inteiro)
+        '%.2f'   -> 10.50 (2 casas decimais)
+        '%.1f%%' -> 10.5% (Percentual, adiciona o símbolo %)
+        'R$ %.0f' -> R$ 10 (Moeda)
+    """
+    
+    # 1. Filtragem e Preparação dos Dados
+    df_plot = df_dados.copy()
+    
+    if 'year' and ano is not None in df_plot.columns:
+        df_plot = df_plot[df_plot['year'] == ano]
+        
+    if df_plot.empty:
+        print(f"Nenhum dado encontrado para o ano {ano}.")
+        return
+
+    # Filtro de destaque
+    coluna_filtro = hue_col if hue_col else x_col
+    if destaque and coluna_filtro in df_plot.columns:
+        df_plot = df_plot[df_plot[coluna_filtro].isin(destaque)]
+
+    # Ordenação decrescente automática
+    df_plot.sort_values(by=y_col, ascending=False, inplace=True)
+
+    # Cria a figura
+    if figsize:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig, ax = plt.subplots()
+
+    # 2. Plotagem
+    sns.barplot(
+        data=df_plot,
+        x=x_col,
+        y=y_col,
+        hue=hue_col if hue_col else x_col,
+        palette=cores_map,
+        edgecolor='black',
+        linewidth=1,
+        ax=ax,
+        dodge=False
+    )
+
+    # 3. Estilização
+    ax.set_title(f"{titulo}", fontsize=16, pad=20)
+    ax.set_xlabel(xlabel, fontsize=12)
+    ax.set_ylabel(ylabel, fontsize=12)
+    
+    ax.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.xticks(rotation=45, ha='right')
+
+    # Legenda inteligente
+    if hue_col and hue_col != x_col:
+        ax.legend(title=hue_col, bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+    else:
+        if ax.get_legend():
+            ax.get_legend().remove()
+
+    # Data Labels (Valores em cima das barras) com formatação customizada
+    # Alterado para usar a variável fmt_rotulo
+    for container in ax.containers:
+        ax.bar_label(container, fmt=fmt_rotulo, padding=3)
+
+    plt.tight_layout()
+
+    # 4. Salvamento
+    if save_fig:
+        base_name = titulo.lower().replace(' ', '_')
+        filename_base = "".join(c for c in f'{base_name}_{ano}'.lower() if c.isalnum() or c in (' ', '_')).replace(' ', '_')
+        filename = f"{filename_base}_safe.png"
+        
+        os.makedirs(save_path, exist_ok=True)
+        full_path = os.path.join(save_path, filename)
+        
+        try:
+            fig.savefig(full_path, bbox_inches='tight', dpi=300)
+            print(f"Gráfico salvo em: {os.path.abspath(full_path)}")
+        except Exception as e:
+            print(f"Erro ao salvar o gráfico: {e}")
 
     plt.show()
