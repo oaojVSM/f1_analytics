@@ -1,10 +1,12 @@
+from matplotlib import patches
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from dateutil.relativedelta import relativedelta
 from matplotlib.patches import Rectangle
-from typing import Optional, Tuple, List
+from typing import Dict, Optional, Tuple, List
 import os
+import matplotlib.patheffects as path_effects
 
 # Define o caminho para o estilo do Matplotlib
 # O estilo 'dark_theme.mplstyle' deve estar na mesma pasta que este script (utils.py)
@@ -275,3 +277,196 @@ def plot_wdc(
 
     plt.show()
 
+
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+import matplotlib.patheffects as path_effects
+import pandas as pd
+import os
+from typing import Optional, Dict
+
+def plot_chapter_cards(
+    df_dados: pd.DataFrame,
+    start_round: int,
+    end_round: int,
+    cores_map: Dict[str, str],
+    save_fig: bool = False,
+    save_path: str = 'grafs',
+    fontname: str = 'sans-serif'
+):
+    """
+    V4: Sem título. Zoom máximo (encosta nas bordas). Proporção 16:9.
+    """
+
+    # --- 1. DADOS ---
+    df_plot = df_dados.copy()
+    df_plot = df_plot[(df_plot['round_id'] >= start_round) & (df_plot['round_id'] <= end_round)]
+
+    if df_plot.empty:
+        print(f"Dados vazios para {start_round}-{end_round}")
+        return
+
+    ranking = df_plot.groupby('driver_surname')['points_scored_at_round'].sum().sort_values(ascending=True)
+    pilotos = ranking.index.tolist()
+    rounds = sorted(df_plot['round_id'].unique())
+    race_map = df_plot.set_index('round_id')['race_name'].to_dict()
+    
+    n_rounds = len(rounds)
+    n_drivers = len(pilotos)
+
+    # --- 2. CONFIGURAÇÃO VISUAL ---
+    alta_densidade = n_rounds >= 8
+    
+    cell_h = 1.0 
+    
+    if alta_densidade:
+        card_width_ratio = 0.75 
+        header_rotation = 45
+        # Buffers mínimos necessários para o texto não cortar
+        header_space = 1.2 
+        
+        font_size_pos = 14
+        font_size_pts = 13
+        font_size_header = 10
+        card_fill = 0.85 
+    else:
+        card_width_ratio = 1.4 
+        header_rotation = 0
+        header_space = 0.8
+        
+        font_size_pos = 16
+        font_size_pts = 15
+        font_size_header = 11
+        card_fill = 0.85
+
+    cell_w = cell_h * card_width_ratio
+    real_card_h = cell_h * card_fill
+    real_card_w = cell_w * card_fill
+    offset_x = real_card_w / 2
+    offset_y = real_card_h / 2
+
+    # --- 3. LIMITES EXATOS (TIGHT BOUNDS) ---
+    # Calculamos onde o pixel de tinta realmente começa e termina
+    
+    # Esquerda: Espaço para nomes (ajustado para ficar bem na borda)
+    x_min_ink = -2.1 * cell_w 
+    
+    # Direita: Final do último card + pequena margem visual
+    x_max_ink = (n_rounds - 1) * cell_w + (cell_w * 0.5)
+    
+    # Base: Espaço para o texto "+25"
+    y_min_ink = -0.6 * cell_h
+    
+    # Topo: Última linha + Espaço do Header (Nome da corrida)
+    top_row_y = (n_drivers - 1) * cell_h
+    y_max_ink = top_row_y + header_space
+    
+    # Dimensões do conteúdo
+    content_width = x_max_ink - x_min_ink
+    content_height = y_max_ink - y_min_ink
+    
+    # Centro
+    center_x = (x_min_ink + x_max_ink) / 2
+    center_y = (y_min_ink + y_max_ink) / 2
+
+    # --- 4. EXPANSÃO PARA 16:9 ---
+    target_ratio = 16 / 9
+    current_ratio = content_width / content_height
+    
+    if current_ratio > target_ratio:
+        # Conteúdo é mais LARGO que a tela.
+        # Largura dita o limite. Altura cresce para preencher a proporção.
+        view_w = content_width
+        view_h = content_width / target_ratio
+    else:
+        # Conteúdo é mais ALTO que a tela.
+        # Altura dita o limite. Largura cresce.
+        view_h = content_height
+        view_w = content_height * target_ratio
+        
+    # Zoom Padding = 1.0 (Sem margem extra, encosta na borda)
+    final_view_w = view_w 
+    final_view_h = view_h
+
+    # --- 5. FIGURA ---
+    fig, ax = plt.subplots(figsize=(16, 9))
+    
+    ax.set_xlim(center_x - (final_view_w / 2), center_x + (final_view_w / 2))
+    ax.set_ylim(center_y - (final_view_h / 2), center_y + (final_view_h / 2))
+    
+    ax.set_aspect('equal')
+    ax.axis('off')
+
+    # --- 6. PLOTAGEM ---
+    for i, driver in enumerate(pilotos):
+        y_center = i * cell_h 
+        cor_base = cores_map.get(driver, '#555555')
+        
+        # NOME PILOTO
+        txt = ax.text(-0.6 * cell_w, y_center, driver, 
+                      va='center', ha='right', 
+                      fontsize=13, fontweight='bold', fontname=fontname, color=cor_base)
+        txt.set_path_effects([path_effects.withStroke(linewidth=3, foreground='white'), path_effects.Normal()])
+
+        for j, rd in enumerate(rounds):
+            x_center = j * cell_w
+            row = df_plot[(df_plot['driver_surname'] == driver) & (df_plot['round_id'] == rd)]
+            
+            if not row.empty:
+                pos_raw = row.iloc[0]['finishing_position_at_round']
+                pts_raw = float(row.iloc[0]['points_scored_at_round']) if pd.notna(row.iloc[0]['points_scored_at_round']) else 0.0
+                
+                txt_pos = f"P{int(pos_raw)}" if pd.notna(pos_raw) else "-"
+                txt_pts = f"+{pts_raw:g}"
+                
+                is_win = (pos_raw == 1)
+                edge_color = '#FFD700' if is_win else 'black'
+                lw = 3 if is_win else 1
+                alpha_calc = 0.15 + (0.85 * (pts_raw / 25.0))
+                card_alpha = min(1.0, max(0.15, alpha_calc))
+
+                rect = patches.FancyBboxPatch(
+                    (x_center - offset_x, y_center - offset_y),
+                    real_card_w, real_card_h,
+                    boxstyle=f"round,pad={real_card_w*0.05}",
+                    facecolor=cor_base,
+                    edgecolor=edge_color,
+                    linewidth=lw,
+                    alpha=card_alpha,
+                    zorder=5 if is_win else 2
+                )
+                ax.add_patch(rect)
+                
+                t_alpha = 1.0 if card_alpha > 0.4 else 0.7
+                ax.text(x_center, y_center + (real_card_h * 0.15), txt_pos, 
+                        ha='center', va='center', 
+                        fontsize=font_size_pos, fontweight='bold', fontname=fontname, 
+                        color='white', alpha=t_alpha, zorder=6)
+                ax.text(x_center, y_center - (real_card_h * 0.25), txt_pts, 
+                        ha='center', va='center', 
+                        fontsize=font_size_pts, fontname=fontname, 
+                        color="#FFFFFF", alpha=t_alpha, zorder=6)
+            
+            # HEADER (NOME DA CORRIDA)
+            if i == n_drivers - 1:
+                nome_corrida = race_map.get(rd, "GP").replace("Grand Prix", "GP")
+                y_pos_h = y_center + (cell_h * 0.6) 
+                ha_align = 'left' if header_rotation > 0 else 'center'
+                va_align = 'bottom'
+                x_adj = x_center - (real_card_w * 0.2) if header_rotation > 0 else x_center
+
+                ax.text(x_adj, y_pos_h, nome_corrida, 
+                        ha=ha_align, va=va_align, rotation=header_rotation,
+                        fontsize=font_size_header, fontweight='bold', color="#FFFFFF", fontname=fontname)
+
+    # SEM TÍTULO
+
+    if save_fig:
+        # Nome do arquivo simplificado
+        filename = f"chapter_clean_{start_round}_{end_round}.png"
+        os.makedirs(save_path, exist_ok=True)
+        full_path = os.path.join(save_path, filename)
+        fig.savefig(full_path, bbox_inches='tight', dpi=300, transparent=True)
+        print(f"Salvo: {full_path}")
+
+    plt.show()
