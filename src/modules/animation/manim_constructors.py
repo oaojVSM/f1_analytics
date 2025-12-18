@@ -22,6 +22,7 @@ class LineChampionshipChart(Scene):
         transparent_bg=False,   # Fundo transparente
         font="Roboto Slab",     # Fonte
         color_highlight="#FFFFFF", # Cor destaque
+        chart_title=None,
         **kwargs
     ):
         self.df_grouped = df_grouped
@@ -30,7 +31,6 @@ class LineChampionshipChart(Scene):
         self.x_max = x_max
         self.y_max = y_max
         
-        # [NOVO] Recebendo o dicionário de configuração dos eixos
         self.axis_config = axis_config if axis_config is not None else {}
         
         self.logos_dir = logos_dir
@@ -43,13 +43,11 @@ class LineChampionshipChart(Scene):
         self.font = font
         self.color_axis = "#AAAAAA"
         self.color_highlight = color_highlight
+        self.chart_title = chart_title
         
         super().__init__(**kwargs)
 
     def construct(self):
-        # Configuração de fundo (apenas se não for transparente)
-        if not self.transparent_bg:
-            self.camera.background_color = "#0a0a0a"
 
         # --- 1. CRIAÇÃO DOS ELEMENTOS ---
         ax, y_numbers, grid_group, x_lbl, y_lbl, x_label_mobs = self._create_axes()
@@ -68,7 +66,10 @@ class LineChampionshipChart(Scene):
             gap_dynamic.set_z_index(10)
 
         # Título
-        title = Text("World Constructors Championship", font=self.font, font_size=18, color=GRAY).to_edge(UP, buff=0.1)
+        if self.chart_title:
+            title = Text(str(self.chart_title), font=self.font, font_size=18, color=GRAY).to_edge(UP, buff=0.1)
+        else:
+            title = VGroup()
 
         # --- 2. ANIMAÇÃO ---
         if self.static_mode:
@@ -88,15 +89,17 @@ class LineChampionshipChart(Scene):
             run_time=2
         )
 
-        self.play(Create(lines_group))
+        self.play(
+            Create(lines_group),
+            LaggedStart(*[FadeIn(l, scale=0.5) for l in logos_group], lag_ratio=0.1),
+            run_time=1
+            )
         
         if self.show_gap:
             self.add(gap_dynamic)
-            
-        self.play(LaggedStart(*[FadeIn(l, scale=0.5) for l in logos_group], lag_ratio=0.1), run_time=1.5)
         
         # A CORRIDA
-        self.play(race_progress.animate.set_value(self.x_max), run_time=15, rate_func=linear)
+        self.play(race_progress.animate.set_value(self.x_max), run_time=30, rate_func=linear)
         self.wait(3)
 
     # ================= MÉTODOS INTERNOS =================
@@ -108,8 +111,8 @@ class LineChampionshipChart(Scene):
             y_range=[0, self.y_max, 50],
             x_length=12, y_length=6,
             axis_config=self.axis_config, # [USO DO NOVO PARAMETRO]
-            x_axis_config={"font_size": 14, "label_direction": DOWN, 'include_numbers': False},
-            y_axis_config={"font_size": 14, "label_direction": LEFT, 'include_numbers': True},
+            x_axis_config={"font_size": 18, "label_direction": DOWN, 'include_numbers': False},
+            y_axis_config={"font_size": 18, "label_direction": LEFT, 'include_numbers': True},
             tips=False
         ).shift(UP * 0.2)
 
@@ -131,7 +134,7 @@ class LineChampionshipChart(Scene):
         # Labels Rotacionados
         x_label_mobs = VGroup()
         for i, race_name in enumerate(self.race_list):
-            t = Text(str(race_name), font_size=12, color=self.color_axis).scale(0.8)
+            t = Text(str(race_name), font_size=18, weight=BOLD, color=self.color_axis).scale(0.8)
             t.move_to(ORIGIN, aligned_edge=LEFT)
             t.rotate(-PI/4, about_point=ORIGIN)
             t.shift(ax.c2p(i, 0) + DOWN * 0.15 + LEFT * 0.1)
@@ -194,13 +197,31 @@ class LineChampionshipChart(Scene):
             logos_group.add(logo)
 
             # --- LINHA ---
-            # Mesma técnica de congelamento de variáveis no lambda
-            line = always_redraw(lambda x=x_smooth, y=y_smooth, c=color: 
-                VGroup(
-                    ax.plot_line_graph(x_values=x[x <= tracker.get_value()], y_values=y[x <= tracker.get_value()], line_color=c, add_vertex_dots=False, stroke_width=8, stroke_opacity=0.2),
-                    ax.plot_line_graph(x_values=x[x <= tracker.get_value()], y_values=y[x <= tracker.get_value()], line_color=c, add_vertex_dots=False, stroke_width=3.5, stroke_opacity=1.0)
+            # Função auxiliar para desenhar a linha interpolando até o ponto exato do tracker
+            # Isso evita o "flickering" ou degraus na ponta da linha quando a animação é lenta
+            def get_line_plot(spl=spline_func, x_ref=x_smooth, y_ref=y_smooth, c=color, lim=limit):
+                t = tracker.get_value()
+                t_curr = min(t, lim)
+                
+                # Seleciona pontos pré-calculados que já passaram
+                mask = x_ref <= t_curr
+                x_plot = x_ref[mask]
+                y_plot = y_ref[mask]
+                
+                # Adiciona o ponto exato atual (t_curr) para conectar suavemente até o logo
+                if len(x_plot) > 0 and x_plot[-1] < t_curr:
+                    y_tip = max(float(spl(t_curr)), 0)
+                    x_plot = np.append(x_plot, t_curr)
+                    y_plot = np.append(y_plot, y_tip)
+                
+                if len(x_plot) < 2: return VGroup()
+
+                return VGroup(
+                    ax.plot_line_graph(x_values=x_plot, y_values=y_plot, line_color=c, add_vertex_dots=False, stroke_width=8, stroke_opacity=0.2),
+                    ax.plot_line_graph(x_values=x_plot, y_values=y_plot, line_color=c, add_vertex_dots=False, stroke_width=3.5, stroke_opacity=1.0)
                 )
-            )
+
+            line = always_redraw(get_line_plot)
             lines_group.add(line)
 
         return logos_group, lines_group, team_splines, team_limits
@@ -241,6 +262,6 @@ class LineChampionshipChart(Scene):
             DashedLine(start=p2_pos, end=p1_pos, color=self.color_highlight, stroke_opacity=0.9, stroke_width=3),
             VGroup(
                 Integer(number=int(p1_score - p2_score), color=self.color_highlight, font_size=24).set_gloss(0.5),
-                Text("pts to 2nd", font=self.font, font_size=10, color=self.color_highlight)
+                Text("pts to 2nd", font=self.font, font_size=12, color=self.color_highlight)
             ).arrange(RIGHT, buff=0.1, aligned_edge=DOWN).next_to((p1_pos + p2_pos) / 2, RIGHT, buff=0.25)
         )
