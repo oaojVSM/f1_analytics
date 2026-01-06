@@ -54,6 +54,8 @@ Apos esses passos, o banco `data/processed/f1.db` estara pronto para uso nas con
   - `data/db_queries/*.sql`: consultas prontas (resultados de corridas, classificatorias, tempos de volta etc.) para alimentar analises.
   - `notebooks/utils.py`: funcoes auxiliares para analise temporal, filtros por piloto/circuito e geracao de graficos especificos.
   - `src/data_viz/plotter.py`: classe `Plotter` com atalhos para graficos recorrentes em analises exploratorias.
+  - `src/features/` - componentes reutilizaveis para criação de features e variáveis utilizadas em análises.
+    - Aqui a lógica é de Domain-Driven Design (DDD). Separo em famílias de features e cada uma recebe seus datasets e lógicas específicas.
 
 ### Exemplo rapido de uso do `DbReader`
 
@@ -79,3 +81,4 @@ print(df_results.head())
 
   - `notebooks/explore_data.ipynb` - exploracao inicial das tabelas consolidadas.
   - `notebooks/analise_verstappen.ipynb` - estudo focado no desempenho de Max Verstappen (usa funcoes de `notebooks/utils.py`).
+  - `notebooks/2025_championship` - estudo focado em uma retrospectiva e análise do campeonato de 2025.
