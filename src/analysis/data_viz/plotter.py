@@ -1,9 +1,10 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+from pyparsing import Dict
 import seaborn as sns
 from dateutil.relativedelta import relativedelta
 from matplotlib.patches import Rectangle
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Union
 import os
 
 # Define o caminho para o estilo do Matplotlib
@@ -344,5 +345,131 @@ def graf_top_pilotos(
         except Exception as e:
             print(f"Erro ao salvar o gráfico: {e}")
 
+
+    plt.show()
+
+
+
+def graf_barras_padrao(
+    df_dados: pd.DataFrame,
+    x_col: str,
+    y_col: str,
+    hue_col: Optional[str] = None,
+    cores_map: Optional[Union[Dict, str]] = None,
+    titulo: str = "Gráfico de Barras",
+    xlabel: str = "Eixo X",
+    ylabel: str = "Eixo Y",
+    destaque: list = None,
+    figsize: Optional[Tuple[int, int]] = (16, 9),
+    save_fig: bool = False,
+    save_path: str = 'grafs',
+    titulo_legenda: str = None,
+    fmt_rotulo: str = '%.0f', # <--- NOVO PARÂMETRO (Padrão: Inteiro sem decimal)
+    dodge: bool = False,
+    barlabel_fontsize: int = 18,
+    axislabel_fontsize: int = 18,
+    title_fontsize: int = 18,
+    tick_fontsize: int = 16,
+):
+    """
+    fmt_rotulo : str
+        String de formatação para os valores acima das barras.
+        Exemplos: 
+        '%.0f'   -> 10 (Inteiro)
+        '%.2f'   -> 10.50 (2 casas decimais)
+        '%.1f%%' -> 10.5% (Percentual, adiciona o símbolo %)
+        'R$ %.0f' -> R$ 10 (Moeda)
+    """
+    
+    # 1. Filtragem e Preparação dos Dados
+    df_plot = df_dados.copy()
+
+    # Filtro de destaque
+    coluna_filtro = hue_col if hue_col else x_col
+    if destaque and coluna_filtro in df_plot.columns:
+        df_plot = df_plot[df_plot[coluna_filtro].isin(destaque)]
+
+    # Lógica de cores inteligente (Substring matching)
+    palette_to_use = cores_map
+    if isinstance(cores_map, dict):
+        col_color = hue_col if hue_col else x_col
+        if col_color in df_plot.columns:
+            unique_vals = df_plot[col_color].unique()
+            palette_to_use = {}
+            
+            # Ordena chaves por tamanho para priorizar matches mais longos/específicos
+            # Ex: "Oracle Red Bull" terá prioridade sobre "Red Bull"
+            sorted_keys = sorted(cores_map.keys(), key=lambda k: len(str(k)), reverse=True)
+            
+            for val in unique_vals:
+                val_str = str(val)
+                # 1. Match exato (Prioridade máxima)
+                if val in cores_map:
+                    palette_to_use[val] = cores_map[val]
+                    continue
+                
+                # 2. Substring match
+                for key in sorted_keys:
+                    if str(key) in val_str:
+                        palette_to_use[val] = cores_map[key]
+                        break
+
+    # Cria a figura
+    if figsize:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig, ax = plt.subplots()
+
+    # 2. Plotagem
+    sns.barplot(
+        data=df_plot,
+        x=x_col,
+        y=y_col,
+        hue=hue_col if hue_col else x_col,
+        palette=palette_to_use,
+        edgecolor='black',
+        linewidth=1,
+        ax=ax,
+        dodge=dodge
+    )
+
+    # 3. Estilização
+    ax.set_title(f"{titulo}", fontsize=title_fontsize, pad=20)
+    ax.set_xlabel(xlabel, fontsize=axislabel_fontsize)
+    ax.set_ylabel(ylabel, fontsize=axislabel_fontsize)
+    
+    ax.grid(axis='y', linestyle='--', alpha=0.7)
+    ax.tick_params(axis='both', labelsize=tick_fontsize)
+    plt.xticks(rotation=45, ha='right')
+
+    # Legenda inteligente
+    if hue_col and hue_col != x_col:
+        ax.legend(title=hue_col if titulo_legenda is None else titulo_legenda, bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+
+    else:
+        if ax.get_legend():
+            ax.get_legend().remove()
+
+    # Data Labels (Valores em cima das barras) com formatação customizada
+    # Alterado para usar a variável fmt_rotulo
+    for container in ax.containers:
+        ax.bar_label(container, fmt=fmt_rotulo, padding=3, fontsize=barlabel_fontsize)
+
+    plt.tight_layout()
+
+    # 4. Salvamento
+    if save_fig:
+        base_name = titulo.lower().replace(' ', '_')
+        filename_base = "".join(c for c in f'{base_name}'.lower() if c.isalnum() or c in (' ', '_')).replace(' ', '_')
+        filename = f"{filename_base}_safe.png"
+        
+        os.makedirs(save_path, exist_ok=True)
+        full_path = os.path.join(save_path, filename)
+        
+        try:
+            fig.savefig(full_path, bbox_inches='tight', dpi=300)
+            print(f"Gráfico salvo em: {os.path.abspath(full_path)}")
+        except Exception as e:
+            print(f"Erro ao salvar o gráfico: {e}")
 
     plt.show()
