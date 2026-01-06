@@ -109,10 +109,10 @@ class LineChampionshipChart(Scene):
         ax = Axes(
             x_range=[0, self.x_max, 1],
             y_range=[0, self.y_max, 50],
-            x_length=12, y_length=6,
+            x_length=12, y_length=5,
             axis_config=self.axis_config, # [USO DO NOVO PARAMETRO]
-            x_axis_config={"font_size": 18, "label_direction": DOWN, 'include_numbers': False},
-            y_axis_config={"font_size": 18, "label_direction": LEFT, 'include_numbers': True},
+            x_axis_config={"font_size": 17, "label_direction": DOWN, 'include_numbers': False},
+            y_axis_config={"font_size": 17, "label_direction": LEFT, 'include_numbers': True},
             tips=False
         ).shift(UP * 0.2)
 

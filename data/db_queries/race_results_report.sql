@@ -44,7 +44,8 @@ SELECT
     se.fastest_lap_rank, -- "Posição" da volta mais rápida do piloto
     fl.fastest_lap_time,
     fl.fastest_lap_speed,
-    se.status AS race_status
+    se.status AS race_status,
+    s.type AS session_type
 FROM
     sessionentry AS se
 JOIN
@@ -66,7 +67,7 @@ JOIN
 LEFT JOIN
     fastest_laps fl ON se.id = fl.session_entry_id
 WHERE
-    s.type = 'R'
+    s.type IN ('R', 'SR')
 ORDER BY
     c.year DESC,
     r.number ASC,
