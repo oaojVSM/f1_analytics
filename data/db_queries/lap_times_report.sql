@@ -16,11 +16,13 @@ SELECT
     r.date AS race_date,
     c.name AS circuit_name,
     c.country AS circuit_country,
+    d.id AS driver_id,
     d.abbreviation AS driver_code,
     d.forename AS driver_forename,
     d.surname AS driver_surname,
     d.forename || ' ' || d.surname AS driver_full_name,
     d.nationality AS driver_nationality,
+    t.name AS constructor_name,
     l.number AS lap_number,
     l.position AS position_on_lap,
     l.time AS lap_time,
@@ -48,6 +50,8 @@ LEFT JOIN
     teamdriver AS td ON re.team_driver_id = td.id
 LEFT JOIN
     driver AS d ON td.driver_id = d.id
+LEFT JOIN
+    team AS t ON td.team_id = t.id
 LEFT JOIN
     pit_laps pl ON l.session_entry_id = pl.session_entry_id AND (l.number = pl.in_lap OR l.number = pl.out_lap)
 WHERE
