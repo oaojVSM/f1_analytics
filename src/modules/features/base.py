@@ -11,5 +11,10 @@ class BaseFeatureExtractor(ABC):
 
     @abstractmethod
     def execute(self) -> pd.DataFrame:
-        # Padronização do método de execução. Aqui eu falo que qualquer classe filho necessitará desse método.
+        """
+        Executes the feature extraction logic.
+        
+        Returns:
+            pd.DataFrame: A DataFrame with the extracted features, aggregated by the defined granularity (default: driver_id, year).
+        """
         pass
