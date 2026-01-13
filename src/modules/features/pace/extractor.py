@@ -13,6 +13,36 @@ class PaceFeatureExtractor(BaseFeatureExtractor):
         super().__init__(raw_data)
         self.df_laps = raw_data.get('lap_times')
         self.df_qualify = raw_data.get('qualify_results')
+        self.stint_counts = None
+
+    def _filter_short_stint_drivers(self):
+        """
+        Removes drivers who have participated in <= 2 races for a specific constructor in a year.
+        Uses shared utility.
+        """
+        from ..utils import get_valid_stints
+        
+        valid_stints, self.stint_counts = get_valid_stints([self.df_laps, self.df_qualify])
+        
+        if valid_stints.empty:
+            return
+
+        # Filter df_laps
+        if self.df_laps is not None and not self.df_laps.empty:
+            self.df_laps = self.df_laps.merge(
+                valid_stints, 
+                on=['year', 'constructor_name', 'driver_id'], 
+                how='inner'
+            )
+
+        # Filter df_qualify
+        if self.df_qualify is not None and not self.df_qualify.empty:
+            self.df_qualify = self.df_qualify.merge(
+                valid_stints, 
+                on=['year', 'constructor_name', 'driver_id'], 
+                how='inner'
+            )
+
 
     def _calculate_race_pace_metrics(self) -> pd.DataFrame:
         if self.df_laps is None or self.df_laps.empty:
@@ -40,28 +70,29 @@ class PaceFeatureExtractor(BaseFeatureExtractor):
         # 3. Calculate basic metrics per (year, race_name, driver_id) first to get race context
         # We need race context (median of the field) BEFORE aggregating to driver/year
         
-        # Group by Race to get Field stats
-        race_stats = df_clean.groupby(['year', 'race_name'])['lap_time_ms'].agg(
-            race_median_pace='median',
-            race_avg_lap_time_std_dev='std' 
-        ).reset_index()
+        # Calculate Driver Stats:
+        # Consistency is calculated as the Average of Per-Stint Standard Deviations
+        # This isolates tyre compounds/fuel loads per stint.
         
-        # Ratio = Driver / Team_Median. IF Driver is faster, Ratio < 1.
-        # If Driver IS the median (e.g. he is the only one or dominant), it biases.
-        # better: Calculate per driver, then join self on constructor to find pair.
-        
-        driver_race_stats = df_clean.groupby(['year', 'race_name', 'driver_id', 'constructor_name'])['lap_time_ms'].agg(
-            driver_median_pace='median',
-            driver_lap_time_std_dev='std',
-            driver_p75='quantile' # q=0.75 needs lambda if not recent pandas, but 'quantile' works for 0.5 default.
-        ).reset_index()
-        
-        # specific 75th percentile
-        p75 = df_clean.groupby(['year', 'race_name', 'driver_id'])['lap_time_ms'].quantile(0.75).reset_index(name='driver_p75')
-        driver_race_stats = driver_race_stats.drop(columns=['driver_p75'], errors='ignore').merge(p75, on=['year', 'race_name', 'driver_id'])
+        # Stint-level consistency
+        if 'stint_number' not in df_clean.columns:
+             # Fallback if stint_number missing (should not happen with new query)
+             current_stint_std = df_clean.groupby(['year', 'race_name', 'driver_id', 'constructor_name'])['lap_time_ms'].std().reset_index(name='driver_lap_time_std_dev')
+        else:
+             stint_std = df_clean.groupby(['year', 'race_name', 'driver_id', 'constructor_name', 'stint_number'])['lap_time_ms'].std().reset_index(name='stint_std_dev')
+             # Average of stint std devs per driver/race
+             current_stint_std = stint_std.groupby(['year', 'race_name', 'driver_id', 'constructor_name'])['stint_std_dev'].mean().reset_index(name='driver_lap_time_std_dev')
 
-        # Merge field stats
-        driver_race_stats = driver_race_stats.merge(race_stats, on=['year', 'race_name'])
+        # Driver Median Pace (Overall)
+        driver_median = df_clean.groupby(['year', 'race_name', 'driver_id', 'constructor_name'])['lap_time_ms'].median().reset_index(name='driver_median_pace')
+        
+        driver_race_stats = driver_median.merge(current_stint_std, on=['year', 'race_name', 'driver_id', 'constructor_name'])
+        
+        # Field Stats (Average of the drivers' consistent scores)
+        race_stats = driver_race_stats.groupby(['year', 'race_name']).agg(
+            race_median_pace=('driver_median_pace', 'median'),
+            race_avg_lap_time_std_dev=('driver_lap_time_std_dev', 'mean') # Average consistency of the field
+        ).reset_index()
         
         # Self-join for teammate
         # We look for another driver in same constructor, same race, same year.
@@ -78,17 +109,20 @@ class PaceFeatureExtractor(BaseFeatureExtractor):
         driver_with_teammate = driver_with_teammate[driver_with_teammate['driver_id'] != driver_with_teammate['teammate_id']]
         
         # Handle cases with > 2 drivers (rare in modern F1 but possible). 
-        # We'll take the average of teammates if multiple, or just the first. 
-        # Group by driver again to collapse multiple teammates (if any)
-        driver_with_teammate = driver_with_teammate.groupby(['year', 'race_name', 'driver_id']).agg({
-            'driver_median_pace': 'first',
-            'driver_lap_time_std_dev': 'first',
-            'driver_p75': 'first',
-            'race_median_pace': 'first',
-            'race_avg_lap_time_std_dev': 'first',
-            'teammate_median_pace': 'median', # Median of teammates
-            'teammate_lap_time_std_dev': 'mean'
-        }).reset_index()
+        # We pick the teammate with the most races in that team/year to be the stable benchmark.
+        
+        if self.stint_counts is not None:
+             teammate_counts = self.stint_counts.rename(columns={'driver_id': 'teammate_id', 'race_count': 'teammate_races'})
+             driver_with_teammate = driver_with_teammate.merge(teammate_counts, on=['year', 'constructor_name', 'teammate_id'], how='left')
+             
+             # Sort by teammate experience (descending)
+             driver_with_teammate.sort_values(by=['year', 'race_name', 'driver_id', 'teammate_races'], ascending=[True, True, True, False], inplace=True)
+
+        # Collapse multiple teammates by taking the first one (most experienced)
+        driver_with_teammate = driver_with_teammate.drop_duplicates(subset=['year', 'race_name', 'driver_id'], keep='first')
+        
+        # Merge Field Stats
+        driver_with_teammate = driver_with_teammate.merge(race_stats, on=['year', 'race_name'], how='left')
 
         # Metrics Calculation
         driver_with_teammate['pace_vs_field'] = driver_with_teammate['driver_median_pace'] / driver_with_teammate['race_median_pace']
@@ -135,11 +169,14 @@ class PaceFeatureExtractor(BaseFeatureExtractor):
         df_merged = df_merged[df_merged['driver_id'] != df_merged['teammate_id']]
         
         # Collapse multiple teammates
-        df_final = df_merged.groupby(['year', 'race_name', 'driver_id']).agg({
-             'best_lap_time': 'first',
-             'pole_time': 'first',
-             'teammate_best_time': 'min' # Validate against the BEST teammate
-        }).reset_index()
+        # Prioritize teammate with most races
+        if self.stint_counts is not None:
+             teammate_counts = self.stint_counts.rename(columns={'driver_id': 'teammate_id', 'race_count': 'teammate_races'})
+             df_merged = df_merged.merge(teammate_counts, on=['year', 'constructor_name', 'teammate_id'], how='left')
+             # Sort
+             df_merged.sort_values(by=['year', 'race_name', 'driver_id', 'teammate_races'], ascending=[True, True, True, False], inplace=True)
+             
+        df_final = df_merged.drop_duplicates(subset=['year', 'race_name', 'driver_id'], keep='first').copy()
         
         # Calculations
         # % Gap. (Driver - Target) / Target. 
@@ -158,18 +195,51 @@ class PaceFeatureExtractor(BaseFeatureExtractor):
         return agg_stats
 
     def execute(self) -> pd.DataFrame:
+        # 0. Filter Short Stints
+        self._filter_short_stint_drivers()
+
         race_stats = self._calculate_race_pace_metrics()
         qualy_stats = self._calculate_qualifying_metrics()
         
+        merged = pd.DataFrame()
         if race_stats.empty and qualy_stats.empty:
             return pd.DataFrame()
+        elif race_stats.empty:
+            merged = qualy_stats
+        elif qualy_stats.empty:
+            merged = race_stats
+        else:
+            merged = pd.merge(race_stats, qualy_stats, on=['driver_id', 'year'], how='outer')
+
+        # Add Metadata (Names, Team)
+        # Combine distinct metadata from both sources to ensure coverage (e.g. drivers who only qualified)
+        meta_dfs = []
         
-        if race_stats.empty:
-            return qualy_stats
+        for df_source in [self.df_laps, self.df_qualify]:
+            if df_source is not None and not df_source.empty:
+                 req_cols = ['driver_id', 'year', 'driver_full_name', 'driver_surname', 'constructor_name']
+                 available_cols = [c for c in req_cols if c in df_source.columns]
+                 
+                 if 'driver_id' in available_cols and 'year' in available_cols:
+                     grp = df_source.groupby(['driver_id', 'year']).agg({
+                        'driver_full_name': 'first',
+                        'driver_surname': 'first',
+                        'constructor_name': lambda x: x.mode().iloc[0] if not x.mode().empty else x.iloc[0]
+                     }).reset_index()
+                     meta_dfs.append(grp)
+        
+        if meta_dfs:
+            # Concat and drop duplicates (keep first found)
+            meta_combined = pd.concat(meta_dfs).drop_duplicates(subset=['driver_id', 'year'])
             
-        if qualy_stats.empty:
-            return race_stats
+            merged = merged.merge(meta_combined, on=['driver_id', 'year'], how='left')
             
-        # Merge
-        merged = pd.merge(race_stats, qualy_stats, on=['driver_id', 'year'], how='outer')
+            # Reorder columns to put metadata first
+            cols = merged.columns.tolist()
+            meta_cols = ['driver_id', 'year', 'driver_full_name', 'driver_surname', 'constructor_name']
+            # Filter meta_cols in case some are missing
+            meta_cols = [c for c in meta_cols if c in cols]
+            other_cols = [c for c in cols if c not in meta_cols]
+            merged = merged[meta_cols + other_cols]
+
         return merged

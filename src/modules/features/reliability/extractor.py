@@ -16,51 +16,60 @@ class ReliabilityFeatureExtractor(BaseFeatureExtractor):
 
         df = self.df_results.copy()
         
-        # Determine DNF
-        # Status 'Finished' (ID 1 usually) or '+1 Lap' etc are NOT DNFs.
-        # Everything else usually is.
-        # But we need to distinguish Mechanical vs Accident.
-        
-        # Common Status IDs (Standard Ergast/Jolpica mapping assumption, better to check strings if available)
-        # The query returns 'race_status' string.
-        
-        # Finished strings: 'Finished', '+1 Lap', '+2 Laps', ...
-        # If status starts with '+' or is 'Finished', it's not a DNF.
-        # (Be careful with 'Disqualified')
-        
-        def is_dnf(status):
-            s = str(status).lower()
-            if s == 'finished': return False
-            if s.startswith('+'): return False
-            return True
+        df['race_status'] = pd.to_numeric(df['race_status'], errors='coerce').fillna(-1)
 
-        def is_mechanical_dnf(status):
-            s = str(status).lower()
-            if not is_dnf(status): return False
-            
-            # Keywords for accidents/collisions
-            collision_keywords = ['collision', 'accident', 'spun', 'run off', 'disqualified', 'excluded', 'retired', 'withdrew']
-            # 'retired' is vague, but often implies mechanical if not accident. 
-            # However, in many datasets 'Retired' is capable of being anything.
-            # Let's list known Mechanical keywords strictly.
-            mech_keywords = ['engine', 'gearbox', 'transmission', 'clutch', 'hydraulics', 'electrical', 'brakes', 'suspension', 'overheating', 'mechanical', 'power unit', 'ers', 'turbo', 'exhaust', 'oil', 'pump', 'battery']
-            
-            for k in mech_keywords:
-                if k in s:
-                    return True
-            return False
-
-        df['is_dnf'] = df['race_status'].apply(is_dnf)
-        df['is_mechanical_dnf'] = df['race_status'].apply(is_mechanical_dnf)
+        # Status Codes:
+        # 0: Finished
+        # 1: Finished Lap(s) behind
+        # 10: Accident/Collision
+        # 11: Mechanical/Safety/Retirement
+        # 20: Disqualified
+        # 30: Withdrawn/DNS
+        # 40/41: DNQ
+        
+        # Definition of DNF: Anything that is not Finished (0 or 1).
+        # Note: We might want to exclude DNS/DNQ (30, 40, 41) from "Race Starts", 
+        # but for now, DNF Rate usually implies calculated over "Entries" or "Starts".
+        # If we stick to "did not see the chequered flag":
+        df['is_dnf'] = ~df['race_status'].isin([0, 1])
+        
+        # Mechanical DNF: Status 11
+        df['is_mechanical_dnf'] = df['race_status'] == 11
+        
+        # Accident DNF: Status 10 (Optional feature, but good to have)
+        df['is_accident_dnf'] = df['race_status'] == 10
         
         # Aggregation by Year/Driver
         agg = df.groupby(['driver_id', 'year']).agg(
             total_races=('race_name', 'count'),
             total_dnf=('is_dnf', 'sum'),
-            total_mech_dnf=('is_mechanical_dnf', 'sum')
+            total_mech_dnf=('is_mechanical_dnf', 'sum'),
+            total_accident_dnf=('is_accident_dnf', 'sum')
         ).reset_index()
         
         agg['dnf_rate'] = agg['total_dnf'] / agg['total_races']
         agg['mechanical_dnf_rate'] = agg['total_mech_dnf'] / agg['total_races']
+        agg['accident_dnf_rate'] = agg['total_accident_dnf'] / agg['total_races']
         
+        # Add Metadata (Names, Team)
+        if self.df_results is not None and not self.df_results.empty:
+            req_cols = ['driver_id', 'year', 'driver_full_name', 'driver_surname', 'constructor_name']
+            available_cols = [c for c in req_cols if c in self.df_results.columns]
+            
+            if 'driver_id' in available_cols and 'year' in available_cols:
+                meta = self.df_results.groupby(['driver_id', 'year']).agg({
+                    'driver_full_name': 'first',
+                    'driver_surname': 'first',
+                    'constructor_name': lambda x: x.mode().iloc[0] if not x.mode().empty else x.iloc[0]
+                }).reset_index()
+                
+                agg = agg.merge(meta, on=['driver_id', 'year'], how='left')
+                
+                # Reorder
+                cols = agg.columns.tolist()
+                meta_cols = ['driver_id', 'year', 'driver_full_name', 'driver_surname', 'constructor_name']
+                meta_cols = [c for c in meta_cols if c in cols]
+                other_cols = [c for c in cols if c not in meta_cols]
+                agg = agg[meta_cols + other_cols]
+
         return agg

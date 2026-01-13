@@ -12,6 +12,7 @@ from src.modules.data_processing.db_reader import DbReader
 from src.modules.features.pace.extractor import PaceFeatureExtractor
 from src.modules.features.performance.extractor import PerformanceFeatureExtractor
 from src.modules.features.reliability.extractor import ReliabilityFeatureExtractor
+from src.modules.features.experience.extractor import ExperienceFeatureExtractor
 
 def run_pipeline():
     print("Initializing Data Pipeline...")
@@ -67,6 +68,16 @@ def run_pipeline():
     except Exception as e:
         print(f"Error extracting Reliability features: {e}")
         df_rel = pd.DataFrame()
+
+    # 4. Experience Features
+    print("Extracting Experience Features...")
+    try:
+        exp_raw = {'race_results': df_results}
+        exp_ext = ExperienceFeatureExtractor(exp_raw)
+        df_exp = exp_ext.execute()
+    except Exception as e:
+        print(f"Error extracting Experience features: {e}")
+        df_exp = pd.DataFrame()
     
     # Saving Results
     output_dir = project_root / "data" / "features"
@@ -94,6 +105,13 @@ def run_pipeline():
         print(f"Saved reliability_features.csv ({len(df_rel)} rows)")
     else:
         print("Skipped saving reliability_features.csv (Empty DataFrame)")
+
+    if not df_exp.empty:
+        output_path = output_dir / "experience_features.csv"
+        df_exp.to_csv(output_path, index=False)
+        print(f"Saved experience_features.csv ({len(df_exp)} rows)")
+    else:
+        print("Skipped saving experience_features.csv (Empty DataFrame)")
         
     print("Pipeline Completed Successfully.")
 

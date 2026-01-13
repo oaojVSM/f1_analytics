@@ -71,7 +71,7 @@ def _identify_sc_laps(
 
     # 8. Identificar a volta ANTERIOR à volta de SC, por corrida
     # Usamos groupby + shift para "olhar" para a volta seguinte dentro de cada grupo de corrida
-    is_lap_before_sc = df_out.assign(_is_sc_lap=is_sc_lap).groupby(group_cols)['_is_sc_lap'].shift(-1).fillna(False)
+    is_lap_before_sc = df_out.assign(_is_sc_lap=is_sc_lap).groupby(group_cols)['_is_sc_lap'].shift(-1).fillna(0).astype(bool)
 
     # 9. A volta é considerada de SC se for a volta lenta (filtrada) OU a volta anterior a ela
     df_out['is_safety_car_lap'] = is_sc_lap | is_lap_before_sc
@@ -137,6 +137,50 @@ def remove_invalid_laps(
     if remove_dnf_races:
         if 'race_status' not in df_filtrado.columns:
             raise ValueError("The column 'race_status' is required to remove DNF races.")
-        df_filtrado = df_filtrado.query("race_status == 0") # 0 = Finished
+        df_filtrado = df_filtrado[df_filtrado['race_status'].isin([0, 1])].copy() # 0 = Finished, 1 = Finished 1 lap behind leader
 
     return df_filtrado
+
+def get_valid_stints(
+    dfs: List[pd.DataFrame],
+    min_races: int = 2
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Identifies drivers who have participated in > min_races for a specific constructor in a year.
+    
+    Parameters
+    ----------
+    dfs : List[pd.DataFrame]
+        List of dataframes to collect participation from. 
+        Each must contain columns: ['year', 'race_name', 'driver_id', 'constructor_name'].
+    min_races : int, default 2
+        Minimum number of races to be considered a valid stint.
+
+    Returns
+    -------
+    mapped_mask : pd.DataFrame
+        DataFrame with columns ['year', 'constructor_name', 'driver_id'] representing valid stints.
+    stint_counts : pd.DataFrame
+        DataFrame with columns ['year', 'constructor_name', 'driver_id', 'race_count'] with total participation.
+    """
+    participation = []
+    
+    for df in dfs:
+        if df is not None and not df.empty:
+            req_cols = ['year', 'race_name', 'driver_id', 'constructor_name']
+            if all(col in df.columns for col in req_cols):
+                 participation.append(df[req_cols].drop_duplicates())
+
+    if not participation:
+        return pd.DataFrame(), pd.DataFrame()
+
+    # Combine and count unique races per driver/team/year
+    df_part = pd.concat(participation).drop_duplicates()
+    
+    # Count races
+    stint_counts = df_part.groupby(['year', 'constructor_name', 'driver_id']).size().reset_index(name='race_count')
+    
+    # Identify valid stints
+    valid_stints = stint_counts[stint_counts['race_count'] > min_races]
+    
+    return valid_stints[['year', 'constructor_name', 'driver_id']], stint_counts

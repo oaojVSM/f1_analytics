@@ -48,6 +48,21 @@ python src/data_processing/create_db.py
 
 Apos esses passos, o banco `data/processed/f1.db` estara pronto para uso nas consultas e notebooks.
 
+### 5) Gerar a Feature Store (Pipeline de Features)
+
+Para alimentar modelos de ML e análises avançadas, o projeto conta com um pipeline que processa dados brutos e cria tabelas de features consolidadas (ex.: ritmo de corrida, confiabilidade, performance).
+
+Para gerar as features, execute:
+
+```bash
+python src/data_processing/feature_pipeline.py
+```
+
+Isso criará os seguintes arquivos em `data/features/`:
+- `pace_features.csv`: Métricas de ritmo de corrida (consistência, comparação com companheiro, ritmo de classificação).
+- `performance_features.csv`: Métricas de resultados (pontos, posições ganhas, duelos de classificação).
+- `reliability_features.csv`: Taxas de quebra (DNF) e falhas mecânicas.
+
 ## Ferramentas do projeto
 
   - `src/modules/db_reader.py`: classe `DbReader` para executar queries SQL retornando `pandas.DataFrame`.
@@ -76,6 +91,8 @@ print(df_results.head())
   - `src/data_processing/` - scripts de ingestao e preparacao.
   - `src/data_viz/` - utilitarios para visualizacao.
   - `src/modules/` - componentes reutilizaveis (ex.: `DbReader`).
+  - `src/modules/features/` - lógica de extração de features (Pace, Reliability, Performance).
+  - `data/features/` - saída do pipeline de features (arquivos CSV prontos para uso).
 
 ## Notebooks em destaque
 
