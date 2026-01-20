@@ -1,7 +1,9 @@
 # F1 Analytics
 
+[🇺🇸 Read in English](README_en.md)
+
 Projeto para explorar, consolidar e visualizar dados historicos da Formula 1 usando Python, SQLite e Jupyter Notebooks.
-Feito por João Marcolin com um tanto de vibe-coding com bom senso.
+Feito por João Marcolin (com um pouco de assistência de AI).
 
 ## Visao geral do fluxo
 
@@ -48,12 +50,30 @@ python src/data_processing/create_db.py
 
 Apos esses passos, o banco `data/processed/f1.db` estara pronto para uso nas consultas e notebooks.
 
+### 5) Gerar a Feature Store (Pipeline de Features)
+
+Para alimentar modelos de ML e análises avançadas, o projeto conta com um pipeline que processa dados brutos e cria tabelas de features consolidadas (ex.: ritmo de corrida, confiabilidade, performance).
+
+Para gerar as features, execute:
+
+```bash
+python src/data_processing/feature_pipeline.py
+```
+
+Isso criará os seguintes arquivos em `data/features/`:
+- `pace_features.csv`: Métricas de ritmo de corrida (consistência, comparação com companheiro, ritmo de classificação).
+- `performance_features.csv`: Métricas de resultados (pontos, posições ganhas, duelos de classificação).
+- `reliability_features.csv`: Taxas de quebra (DNF) e falhas mecânicas.
+- `experience_features.csv`: Métricas de experiência (número de corridas, pódios, pole positions, etc.).
+
 ## Ferramentas do projeto
 
   - `src/modules/db_reader.py`: classe `DbReader` para executar queries SQL retornando `pandas.DataFrame`.
   - `data/db_queries/*.sql`: consultas prontas (resultados de corridas, classificatorias, tempos de volta etc.) para alimentar analises.
   - `notebooks/utils.py`: funcoes auxiliares para analise temporal, filtros por piloto/circuito e geracao de graficos especificos.
   - `src/data_viz/plotter.py`: classe `Plotter` com atalhos para graficos recorrentes em analises exploratorias.
+  - `src/features/` - componentes reutilizaveis para criação de features e variáveis utilizadas em análises.
+    - Aqui a lógica é de Domain-Driven Design (DDD). Separo em famílias de features e cada uma recebe seus datasets e lógicas específicas.
 
 ### Exemplo rapido de uso do `DbReader`
 
@@ -74,8 +94,11 @@ print(df_results.head())
   - `src/data_processing/` - scripts de ingestao e preparacao.
   - `src/data_viz/` - utilitarios para visualizacao.
   - `src/modules/` - componentes reutilizaveis (ex.: `DbReader`).
+  - `src/modules/features/` - lógica de extração de features (Pace, Reliability, Performance).
+  - `data/features/` - saída do pipeline de features (arquivos CSV prontos para uso).
 
 ## Notebooks em destaque
 
   - `notebooks/explore_data.ipynb` - exploracao inicial das tabelas consolidadas.
   - `notebooks/analise_verstappen.ipynb` - estudo focado no desempenho de Max Verstappen (usa funcoes de `notebooks/utils.py`).
+  - `notebooks/2025_championship` - estudo focado em uma retrospectiva e análise do campeonato de 2025.

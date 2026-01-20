@@ -1,0 +1,10 @@
+{
+    "sqltools.connections": [
+        {
+            "previewLimit": 50,
+            "driver": "SQLite",
+            "name": "f1_raw_db",
+            "database": "${workspaceFolder:f1_analytics}/data/processed/f1.db"
+        }
+    ]
+}
