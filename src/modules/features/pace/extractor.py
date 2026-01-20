@@ -51,13 +51,6 @@ class PaceFeatureExtractor(BaseFeatureExtractor):
         # Pre-process: Ensure lap_time_ms exists for the filter to work
         df_proc = self.df_laps.copy()
         if 'lap_time_ms' not in df_proc.columns and 'lap_time' in df_proc.columns:
-             # Convert "MM:SS.ms" string to milliseconds
-             # Using pd.to_timedelta with errors='coerce' to handle '1:23.456' format
-             # Note: '0:' prefix might be needed if format is 'MM:SS.ms' and pandas expects 'HH:MM:SS'
-             # but usually pandas is smart enough if minimal units are present.
-             # However, F1 data often is '1:23.456'. 
-             # Safe way: pd.to_timedelta('00:' + df['lap_time']) if needed, but let's try direct first.
-             # Based on notebook utils, direct to_timedelta works.
              df_proc['lap_time_ms'] = pd.to_timedelta(df_proc['lap_time'], errors='coerce').dt.total_seconds() * 1000
              
         # 1. Filter invalid laps

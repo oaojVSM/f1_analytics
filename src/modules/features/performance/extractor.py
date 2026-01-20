@@ -101,6 +101,9 @@ class PerformanceFeatureExtractor(BaseFeatureExtractor):
         
         h2h_stats['qualy_vs_teammate_win_rate'] = h2h_stats['qualy_h2h_wins'] / h2h_stats['total_h2h_races']
         h2h_stats['race_vs_teammate_win_rate'] = h2h_stats['race_h2h_wins'] / h2h_stats['total_h2h_races']
+
+        # Remove coluna que foi usada para calculos mas que não é uma feature interessante por si só
+        h2h_stats = h2h_stats.drop(columns=['total_h2h_races'])
         
         # 3. Yearly Aggregation (General)
         # Total Points per Year per Driver

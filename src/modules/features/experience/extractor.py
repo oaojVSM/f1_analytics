@@ -24,22 +24,16 @@ class ExperienceFeatureExtractor(BaseFeatureExtractor):
             if col in df.columns:
                  df[col] = pd.to_numeric(df[col], errors='coerce')
         
-        # Ensure correct sorting for cumulative calculation
-        # Sort by Year and Round (Race Date implicitly)
-        # Assuming r.number or race_date is available. 
-        # race_results_report has 'year' and 'round_id' (but round_id might not be ordered? query says r.number ASC)
-        # The query sorts by Year DESC, Round Number ASC.
-        # We need Ascending Year for cumulative sum.
-        
-        df = df.sort_values(by=['year', 'round_id']) # Using round_id as proxy for chronological order if available, or just year is not enough if we want to be precise, but we aggregate by year anyway.
-        # Ideally, we calculate stats UP TO the end of that year.
+        df = df.sort_values(by=['year', 'round_id']) 
+
+        # Filter main race event only
+        df = df[df['session_type'] == 'R'].copy()
         
         # Define Event Columns
         df['is_win'] = df['finishing_position'] == 1
         df['is_podium'] = df['finishing_position'] <= 3
         df['is_pole'] = df['starting_position'] == 1
-        df['is_race_start'] = True # If they are in race results (Finished, DNF etc), they started. (Excluding DNS/Did Not Qualify if filtered, but reliability extractor handles that detailed status)
-                                   # We will assume entries in this table are starts or at least participation.
+        df['is_race_start'] = True 
         
         # Group by Driver and Year to get yearly totals first
         yearly_stats = df.groupby(['driver_id', 'year']).agg(
@@ -59,8 +53,6 @@ class ExperienceFeatureExtractor(BaseFeatureExtractor):
         yearly_stats['career_poles'] = yearly_stats.groupby('driver_id')['yearly_poles'].cumsum()
         
         # Calculate Years in F1 (Experience)
-        # Simply row number per driver? 
-        # Yes, if we have a row for each year.
         yearly_stats['years_in_f1'] = yearly_stats.groupby('driver_id').cumcount() + 1
         
         # Select final columns

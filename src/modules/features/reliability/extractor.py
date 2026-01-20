@@ -28,15 +28,12 @@ class ReliabilityFeatureExtractor(BaseFeatureExtractor):
         # 40/41: DNQ
         
         # Definition of DNF: Anything that is not Finished (0 or 1).
-        # Note: We might want to exclude DNS/DNQ (30, 40, 41) from "Race Starts", 
-        # but for now, DNF Rate usually implies calculated over "Entries" or "Starts".
-        # If we stick to "did not see the chequered flag":
         df['is_dnf'] = ~df['race_status'].isin([0, 1])
         
         # Mechanical DNF: Status 11
         df['is_mechanical_dnf'] = df['race_status'] == 11
         
-        # Accident DNF: Status 10 (Optional feature, but good to have)
+        # Accident DNF: Status 10
         df['is_accident_dnf'] = df['race_status'] == 10
         
         # Aggregation by Year/Driver
