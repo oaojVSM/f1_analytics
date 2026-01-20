@@ -1,7 +1,9 @@
 # F1 Analytics
 
+[🇺🇸 Read in English](README_en.md)
+
 Projeto para explorar, consolidar e visualizar dados historicos da Formula 1 usando Python, SQLite e Jupyter Notebooks.
-Feito por João Marcolin com um tanto de vibe-coding com bom senso.
+Feito por João Marcolin (com um pouco de assistência de AI).
 
 ## Visao geral do fluxo
 
@@ -62,6 +64,7 @@ Isso criará os seguintes arquivos em `data/features/`:
 - `pace_features.csv`: Métricas de ritmo de corrida (consistência, comparação com companheiro, ritmo de classificação).
 - `performance_features.csv`: Métricas de resultados (pontos, posições ganhas, duelos de classificação).
 - `reliability_features.csv`: Taxas de quebra (DNF) e falhas mecânicas.
+- `experience_features.csv`: Métricas de experiência (número de corridas, pódios, pole positions, etc.).
 
 ## Ferramentas do projeto
 
