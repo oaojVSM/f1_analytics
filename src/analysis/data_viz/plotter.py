@@ -364,12 +364,13 @@ def graf_barras_padrao(
     save_fig: bool = False,
     save_path: str = 'grafs',
     titulo_legenda: str = None,
-    fmt_rotulo: str = '%.0f', # <--- NOVO PARÂMETRO (Padrão: Inteiro sem decimal)
+    fmt_rotulo: str = '%.0f',
     dodge: bool = False,
     barlabel_fontsize: int = 18,
     axislabel_fontsize: int = 18,
     title_fontsize: int = 18,
     tick_fontsize: int = 16,
+    show_legend: bool = True,
 ):
     """
     fmt_rotulo : str
@@ -443,7 +444,7 @@ def graf_barras_padrao(
     plt.xticks(rotation=45, ha='right')
 
     # Legenda inteligente
-    if hue_col and hue_col != x_col:
+    if show_legend and hue_col and hue_col != x_col:
         ax.legend(title=hue_col if titulo_legenda is None else titulo_legenda, bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
 
     else:
