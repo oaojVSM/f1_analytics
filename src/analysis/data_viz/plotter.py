@@ -1,10 +1,11 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 from pyparsing import Dict
 import seaborn as sns
 from dateutil.relativedelta import relativedelta
-from matplotlib.patches import Rectangle
-from typing import Optional, Tuple, List, Union
+from matplotlib.patches import Rectangle, Circle
+from typing import Optional, Tuple, List, Union, Dict
 import os
 
 # Define o caminho para o estilo do Matplotlib
@@ -16,6 +17,115 @@ if os.path.exists(style_path):
     plt.style.use(style_path)
 else:
     print(f"Aviso: Arquivo de estilo não encontrado em '{style_path}'. Usando o estilo padrão do Matplotlib.")
+
+
+def graf_radar_padrao(
+    dados: Dict[str, float],
+    titulo: str = "Radar Chart",
+    cor_base: str = "#FF7009",
+    alpha_preenchimento: float = 0.2,
+    center_value: float = None,
+    center_value_fmt: str = "{:.1f}",
+    figsize: Tuple[int, int] = (10, 10),
+    save_fig: bool = False,
+    save_path: str = 'grafs',
+    label_fontsize: int = 14,
+    max_val: float = None,  # Optional manual max value for scaling
+    tip_value_fmt: str = "{:.0f}",
+    tip_fontsize: int = 12,
+    center_fontsize: int = 24
+):
+    """
+    Plota um gráfico de radar limpo e estilizado.
+    
+    Args:
+        dados: Dicionário onde as chaves são as categorias (stats) e os valores são os números.
+    """
+    # Preparação dos dados
+    categories = list(dados.keys())
+    values = list(dados.values())
+    N = len(categories)
+    
+    # Repetir o primeiro valor para fechar o ciclo
+    values += values[:1]
+    
+    # Calcular ângulos
+    angles = [n / float(N) * 2 * np.pi for n in range(N)]
+    angles += angles[:1]
+    
+    # Criar figura
+    fig, ax = plt.subplots(figsize=figsize, subplot_kw=dict(projection='polar'))
+    
+    # Ajustar offset para que o primeiro eixo fique no topo e sentido horário
+    ax.set_theta_offset(np.pi / 2)
+    ax.set_theta_direction(-1)
+    
+    # Desenhar linhas e preenchimento
+    ax.plot(angles, values, color=cor_base, linewidth=2, linestyle='solid')
+    ax.fill(angles, values, color=cor_base, alpha=alpha_preenchimento)
+    
+    # Estilização dos Eixos (Categorias)
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(categories, size=label_fontsize)
+    
+    # Customizar os labels dos eixos para ficarem afastados (padding)
+    for label, angle in zip(ax.get_xticklabels(), angles[:-1]):
+        if angle in (0, np.pi):
+            label.set_horizontalalignment('center')
+        elif 0 < angle < np.pi:
+            label.set_horizontalalignment('left')
+        else:
+            label.set_horizontalalignment('right')
+
+    # Remover yticks padrão ou customizar
+    ax.yaxis.grid(True, color='#444444', linestyle='dashed', alpha=0.5)
+    ax.xaxis.grid(True, color='#444444', linestyle='dashed', alpha=0.5)
+    
+    # Remover labels radiais (números do eixo Y) para look "clean"
+    ax.set_yticklabels([])
+    
+    # Definir limite máximo se fornecido, senão usa max dos dados
+    if max_val:
+        ax.set_ylim(0, max_val)
+    else:
+        ax.set_ylim(0, max(values) * 1.1)
+
+    # Remover spine circular externa para visual mais limpo
+    ax.spines['polar'].set_visible(False)
+    
+    # Adicionar Valores nas pontas
+    for angle, value in zip(angles[:-1], values[:-1]):
+        ax.text(angle, value + (max(values)*0.1 if not max_val else max_val*0.1), 
+                tip_value_fmt.format(value), 
+                ha='center', va='center', size=tip_fontsize, color='white', fontweight='bold')
+
+    # Valor Central Opcional
+    if center_value is not None:
+        ax.text(0, 0, center_value_fmt.format(center_value), 
+                ha='center', va='center', size=center_fontsize, fontweight='bold', color='white', zorder=10)
+
+    # Título
+    plt.title(titulo, size=20, y=1.05)
+    
+    plt.tight_layout()
+
+    # Salvamento
+    if save_fig:
+        filename_base = "".join(c for c in titulo.lower() if c.isalnum() or c in (' ', '_')).replace(' ', '_')
+        filename = f"{filename_base}_radar.png"
+        
+        os.makedirs(save_path, exist_ok=True)
+        full_path = os.path.join(save_path, filename)
+        
+        try:
+            fig.savefig(full_path, bbox_inches='tight', dpi=300)
+            print(f"Gráfico salvo em: {os.path.abspath(full_path)}")
+        except Exception as e:
+            print(f"Erro ao salvar o gráfico: {e}")
+
+    plt.show()
+
+
 
 
 def gera_graf_top_10_mais_jovens(
@@ -364,12 +474,13 @@ def graf_barras_padrao(
     save_fig: bool = False,
     save_path: str = 'grafs',
     titulo_legenda: str = None,
-    fmt_rotulo: str = '%.0f', # <--- NOVO PARÂMETRO (Padrão: Inteiro sem decimal)
+    fmt_rotulo: str = '%.0f',
     dodge: bool = False,
     barlabel_fontsize: int = 18,
     axislabel_fontsize: int = 18,
     title_fontsize: int = 18,
     tick_fontsize: int = 16,
+    show_legend: bool = True,
 ):
     """
     fmt_rotulo : str
@@ -443,7 +554,7 @@ def graf_barras_padrao(
     plt.xticks(rotation=45, ha='right')
 
     # Legenda inteligente
-    if hue_col and hue_col != x_col:
+    if show_legend and hue_col and hue_col != x_col:
         ax.legend(title=hue_col if titulo_legenda is None else titulo_legenda, bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
 
     else:

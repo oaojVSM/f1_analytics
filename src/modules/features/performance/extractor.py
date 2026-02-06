@@ -38,12 +38,15 @@ class PerformanceFeatureExtractor(BaseFeatureExtractor):
             return pd.DataFrame()
 
         # 0. Filter Short Stints
-        self._filter_short_stint_drivers()
+        # self._filter_short_stint_drivers()
         
         if self.df_results.empty:
              return pd.DataFrame()
 
         df = self.df_results.copy()
+
+        # Only get main event data:
+        df = df[df['session_type'] == 'R']
         
         # Ensure numeric columns
         cols_to_numeric = ['finishing_position', 'starting_position', 'points_scored']
@@ -71,15 +74,15 @@ class PerformanceFeatureExtractor(BaseFeatureExtractor):
         # Filter self
         race_merged = race_merged[race_merged['driver_id'] != race_merged['teammate_id']]
         
-        # Handle multiple teammates: Prioritize teammate with most races in that stint
-        if self.stint_counts is not None:
-             teammate_counts = self.stint_counts.rename(columns={'driver_id': 'teammate_id', 'race_count': 'teammate_races'})
-             race_merged = race_merged.merge(teammate_counts, on=['year', 'constructor_name', 'teammate_id'], how='left')
-             # Sort by teammate experience (descending)
-             race_merged.sort_values(by=['year', 'race_name', 'driver_id', 'teammate_races'], ascending=[True, True, True, False], inplace=True)
+        # # Handle multiple teammates: Prioritize teammate with most races in that stint
+        # if self.stint_counts is not None:
+        #      teammate_counts = self.stint_counts.rename(columns={'driver_id': 'teammate_id', 'race_count': 'teammate_races'})
+        #      race_merged = race_merged.merge(teammate_counts, on=['year', 'constructor_name', 'teammate_id'], how='left')
+        #      # Sort by teammate experience (descending)
+        #      race_merged.sort_values(by=['year', 'race_name', 'driver_id', 'teammate_races'], ascending=[True, True, True, False], inplace=True)
              
-        # Collapse multiple teammates (keep first/most experienced)
-        race_merged = race_merged.drop_duplicates(subset=['year', 'race_name', 'driver_id'], keep='first')
+        # # Collapse multiple teammates (keep first/most experienced)
+        # race_merged = race_merged.drop_duplicates(subset=['year', 'race_name', 'driver_id'], keep='first')
         
         # Metrics Calculation
         race_merged['qualified_ahead'] = race_merged['starting_position'] < race_merged['teammate_start']
