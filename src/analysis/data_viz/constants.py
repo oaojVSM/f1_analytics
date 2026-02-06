@@ -30,7 +30,7 @@ DRIVERS_BY_TEAM = {
     "Alpine": ["Gasly", "Doohan", "Colapinto"],
     "Williams": ["Albon", "Sainz", "Sargeant"],
     "VCARB": ["Tsunoda", "Hadjar", "Ricciardo"],
-    "Sauber": ["Hulkenberg", "Bortoleto", "Bottas", "Zhou"],
+    "Sauber": ["Hulkenberg", "Bortoleto", "Bottas", "Zhou", "Hülkenberg"],
     "Haas": ["Ocon", "Bearman", "Magnussen"]
 }
 
